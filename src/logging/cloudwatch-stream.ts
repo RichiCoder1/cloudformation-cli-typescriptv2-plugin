@@ -8,9 +8,9 @@ import {
 } from '@aws-sdk/client-cloudwatch-logs';
 import { Writable } from 'node:stream';
 import { type Logger } from 'pino';
-import Pool from 'piscina';
-import type { publishLogMessage } from './background';
-import { MetricsPublisher } from './metrics';
+import Pool from 'tinypool';
+import type { publishLogMessage } from './background.js';
+import { MetricsPublisher } from './metrics.js';
 
 type PublishLogMessageArgs = Parameters<typeof publishLogMessage>;
 
@@ -43,8 +43,6 @@ export class CloudWatchLogsStream extends Writable {
             logStreamName: this.logStreamName,
         });
         this.pool = new Pool({
-            // This is technically valid, but typescript does weird things
-            // @ts-expect-error
             filename: new URL('./background.js', import.meta.url).href,
             workerData: {
                 credentials: options.credentials,

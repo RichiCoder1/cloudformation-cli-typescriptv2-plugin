@@ -1,27 +1,16 @@
-import { MetricsPublisher } from './metrics';
+import { Context } from 'aws-lambda';
+import { MetricsPublisher } from './metrics.js';
 import { AwsCredentialIdentity } from '@aws-sdk/types';
 import { Logger, multistream, pino } from 'pino';
 import { pinoLambdaDestination } from 'pino-lambda';
-import { BaseRequest } from '~/event';
-import { LambdaContext, LambdaEvent } from 'pino-lambda/dist/types';
-import { withRequest } from './base';
-import { CloudWatchLogsStream } from './cloudwatch-stream';
+import { BaseRequest } from '~/event.js';
+import { withRequest } from './base.js';
+import { CloudWatchLogsStream } from './cloudwatch-stream.js';
 import camelcaseKeys from 'camelcase-keys';
-
-function isCredentials(
-    credentials: unknown
-): credentials is AwsCredentialIdentity {
-    return (
-        typeof credentials === 'object' &&
-        credentials !== null &&
-        'accessKeyId' in credentials &&
-        'secretAccessKey' in credentials
-    );
-}
 
 export async function getInstrumentation(
     request: BaseRequest,
-    context: LambdaContext,
+    context: Context,
     log: Logger
 ): Promise<[Logger, MetricsPublisher]> {
     withRequest(request, context);

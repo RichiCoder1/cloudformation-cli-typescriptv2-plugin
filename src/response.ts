@@ -1,4 +1,4 @@
-import { v } from 'suretype';
+import { TypeOf, v } from 'suretype';
 
 export enum OperationStatus {
     Pending = 'PENDING',
@@ -25,7 +25,7 @@ export enum HandlerErrorCode {
     InvalidTypeConfiguration = 'InvalidTypeConfiguration',
 }
 
-export const BaseResponse = v.object({
+export const BaseResponseSchema = v.object({
     Status: v.string().enum(...Object.values(OperationStatus)),
     ErrorCode: v.string().enum(...Object.values(HandlerErrorCode)),
     Message: v.string(),
@@ -33,3 +33,5 @@ export const BaseResponse = v.object({
     ResourceModels: v.array(v.any()),
     NextToken: v.string(),
 });
+
+export type BaseResponse = TypeOf<typeof BaseResponseSchema>;

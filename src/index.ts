@@ -1,12 +1,19 @@
-import camelcaseKeys from 'camelcase-keys';
-import { ensureBaseRequest } from './event';
-import { BaseRequest } from '~/event';
-import { OnCreateEvent, OnCreateResult } from './handlers';
-import { compile, CoreValidator, TypeOf } from 'suretype';
+import { MetricsPublisher } from './logging/metrics.js';
+import { Logger } from 'pino';
 import { Context } from 'aws-lambda';
-import { BaseResponse, OperationStatus } from './response';
-import { getInstrumentation } from './logging';
-import { defaultLogger } from './logging/base';
+import camelcaseKeys from 'camelcase-keys';
+import { compile, CoreValidator, TypeOf } from 'suretype';
+import { BaseRequest } from '~/event.js';
+import { ensureBaseRequest } from './event.js';
+import {
+    OnCreateEvent,
+    OnCreateResult,
+    SuccessWithCallback,
+} from './handlers.js';
+import { defaultLogger } from './logging/base.js';
+import { getInstrumentation } from './logging/index.js';
+import { BaseResponse, OperationStatus } from './response.js';
+import { SetRequired, CamelCasedPropertiesDeep } from 'type-fest';
 
 export interface ResourceHandlerProperties<
     TProperties extends CoreValidator<unknown>,
@@ -15,16 +22,61 @@ export interface ResourceHandlerProperties<
 > {
     readonly typeName: string;
     readonly schema: TProperties;
+    readonly ids: readonly TPrimaryKeys[];
     readonly typeConfigurationSchema?: TTypeConfiguration;
-    create(
-        event: OnCreateEvent<TProperties, TTypeConfiguration, TPrimaryKeys>
-    ): Promise<OnCreateResult<TProperties>>;
 }
 
-export class ResourceHandler<TProperties extends CoreValidator<unknown>> {
+export interface ResourceHandlers<
+    TProperties extends CoreValidator<unknown>,
+    TTypeConfiguration extends CoreValidator<unknown> = BaseRequest['RequestData']['TypeConfiguration'],
+    TPrimaryKeys extends keyof TypeOf<TProperties> = never,
+    THandler = ResourceHandlerBase<
+        TProperties,
+        TTypeConfiguration,
+        TPrimaryKeys
+    >
+> {
+    readonly create?: (
+        this: THandler,
+        event: OnCreateEvent<TProperties, TTypeConfiguration, TPrimaryKeys>
+    ) => Promise<OnCreateResult<TProperties, TPrimaryKeys>>;
+}
+
+export abstract class ResourceHandlerBase<
+    TProperties extends CoreValidator<unknown>,
+    TTypeConfiguration extends CoreValidator<unknown>,
+    TPrimaryKeys extends keyof TypeOf<TProperties>
+> {
+    #handlers: ResourceHandlers<
+        TProperties,
+        TTypeConfiguration,
+        TPrimaryKeys
+    > | null = null;
+
+    #logger: Logger = defaultLogger;
+    #metrics: MetricsPublisher | null = null;
+
+    get logger() {
+        return this.#logger;
+    }
+
+    get metrics() {
+        return this.#metrics!;
+    }
+
     constructor(
-        private readonly options: ResourceHandlerProperties<TProperties>
+        private readonly options: ResourceHandlerProperties<
+            TProperties,
+            TTypeConfiguration,
+            TPrimaryKeys
+        >
     ) {}
+
+    public handlers(
+        options: ResourceHandlers<TProperties, TTypeConfiguration, TPrimaryKeys>
+    ) {
+        this.#handlers = options;
+    }
 
     public async entrypoint(
         event: unknown,
@@ -37,6 +89,7 @@ export class ResourceHandler<TProperties extends CoreValidator<unknown>> {
                 context,
                 defaultLogger
             );
+            this.#logger = logger;
             const ensureProperties = compile(this.options.schema, {
                 ensure: true,
             });
@@ -45,9 +98,12 @@ export class ResourceHandler<TProperties extends CoreValidator<unknown>> {
                     const properties = ensureProperties(
                         baseRequest.RequestData.ResourceProperties
                     );
-                    const result = await this.options.create({
+                    const createHandler = this.#handlers!.create.bind(this);
+                    const result = await createHandler({
                         requestType: 'Create',
-                        properties: camelcaseKeys(properties, { deep: true }),
+                        properties: camelcaseKeys(properties, {
+                            deep: true,
+                        }) as any,
                         request: baseRequest,
                         logger,
                         typeConfiguration:
@@ -78,5 +134,27 @@ export class ResourceHandler<TProperties extends CoreValidator<unknown>> {
             defaultLogger.error(e, 'Failed to parse request');
             throw e;
         }
+    }
+
+    public created(
+        properties: CamelCasedPropertiesDeep<
+            SetRequired<TypeOf<TProperties>, TPrimaryKeys>
+        >
+    ): OnCreateResult<TProperties, TPrimaryKeys> {
+        return {
+            status: 'SUCCESS',
+            properties,
+        };
+    }
+
+    public createInProgress(
+        properties: SuccessWithCallback<TProperties>['properties'],
+        callbackContext: Record<string, string>
+    ): OnCreateResult<TProperties, TPrimaryKeys> {
+        return {
+            status: 'IN_PROGRESS',
+            properties,
+            callbackContext,
+        };
     }
 }

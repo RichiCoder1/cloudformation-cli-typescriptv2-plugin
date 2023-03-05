@@ -1,0 +1,24 @@
+{
+    "artifact_type": "RESOURCE",
+    "typeName": "Test::Test::Test",
+    "language": "typescript",
+    "runtime": "nodejs18.x",
+    "entrypoint": "dist/handlers.entrypoint",
+    "testEntrypoint": "dist/handlers.testEntrypoint",
+    "settings": {
+        "version": false,
+        "subparser_name": "typescript",
+        "verbose": 0,
+        "force": false,
+        "type_name": "Test::Test::Test",
+        "artifact_type": "RESOURCE",
+        "endpoint_url": null,
+        "region": null,
+        "target_schemas": [],
+        "use_docker": false,
+        "skip_npm_install": false,
+        "npm_link": false,
+        "language": "typescript",
+        "protocolVersion": "2.0.0"
+    }
+}

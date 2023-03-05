@@ -34,4 +34,7 @@ def setup_subparser(subparsers: argparse._SubParsersAction, parents):
     )
     parser.set_defaults(skip_npm_install=False)
 
+    parser.add_argument("--npm-link", action="store_true", help=argparse.SUPPRESS)
+    parser.set_defaults(npm_link=False)
+
     return parser

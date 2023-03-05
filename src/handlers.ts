@@ -1,8 +1,15 @@
-import { BaseRequest } from '~/event';
-import { v, CoreValidator, TypeOf } from 'suretype';
-import { CamelCaseKeys } from 'camelcase-keys';
+import { BaseRequest } from '~/event.js';
+import { CoreValidator, TypeOf } from 'suretype';
 import { Logger } from 'pino';
-import { PartialDeep, SetRequired } from 'type-fest';
+import {
+    PartialDeep,
+    SetRequired,
+    Simplify,
+    CamelCasedPropertiesDeep,
+} from 'type-fest';
+
+// I apologize to anyone who has to read this code.
+// TypeScript requires some crazy work for a good dev experience.
 
 export type OnCreateEvent<
     TProperties extends CoreValidator<unknown>,
@@ -11,26 +18,36 @@ export type OnCreateEvent<
 > = {
     readonly requestType: 'Create';
     readonly request: BaseRequest;
-    readonly properties: Omit<
-        CamelCaseKeys<TypeOf<TProperties>, true>,
-        TPrimaryKeys
+    readonly properties: Simplify<
+        Omit<CamelCasedPropertiesDeep<TypeOf<TProperties>>, TPrimaryKeys>
     >;
     readonly logger: Logger;
-    readonly typeConfiguration: CamelCaseKeys<TypeOf<TTypeConfiguration>, true>;
+    readonly typeConfiguration: CamelCasedPropertiesDeep<
+        TypeOf<TTypeConfiguration>
+    >;
 };
 
-export type SuccessWithProperties<TProperties extends CoreValidator<unknown>> =
-    {
-        readonly status: 'SUCCESS';
-        readonly properties: CamelCaseKeys<TypeOf<TProperties>, true>;
-    };
+export type SuccessWithProperties<
+    TProperties extends CoreValidator<unknown>,
+    TPrimaryKeys extends keyof TypeOf<TProperties>
+> = {
+    readonly status: 'SUCCESS';
+    readonly properties: Simplify<
+        CamelCasedPropertiesDeep<SetRequired<TypeOf<TProperties>, TPrimaryKeys>>
+    >;
+};
 
 export type SuccessWithCallback<TProperties extends CoreValidator<unknown>> = {
     readonly status: 'IN_PROGRESS';
-    readonly properties: PartialDeep<CamelCaseKeys<TypeOf<TProperties>, true>>;
+    readonly properties: Simplify<
+        PartialDeep<CamelCasedPropertiesDeep<TypeOf<TProperties>>>
+    >;
     readonly callbackContext: Record<string, string>;
 };
 
-export type OnCreateResult<TProperties extends CoreValidator<unknown>> =
-    | SuccessWithProperties<TProperties>
+export type OnCreateResult<
+    TProperties extends CoreValidator<unknown>,
+    TPrimaryKeys extends keyof TypeOf<TProperties>
+> =
+    | SuccessWithProperties<TProperties, TPrimaryKeys>
     | SuccessWithCallback<TProperties>;

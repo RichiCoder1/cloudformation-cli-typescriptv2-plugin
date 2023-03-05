@@ -8,13 +8,13 @@ import {
     PutLogEventsCommandInput,
 } from '@aws-sdk/client-cloudwatch-logs';
 import pRetry from 'p-retry';
-import piscina from 'piscina';
+import Pool from 'tinypool';
 
 export type WorkerData = {
     credentials: AwsCredentialIdentity;
 };
 
-const workerData = piscina.workerData as WorkerData;
+const workerData = Pool.workerData as WorkerData;
 
 const logClient = new CloudWatchLogs({
     credentials: workerData.credentials,

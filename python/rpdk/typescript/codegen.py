@@ -48,6 +48,7 @@ class TypescriptLanguagePlugin(LanguagePlugin):
         self.package_root = None
         self._use_docker = None
         self._skip_npm_install = False
+        self._npm_link = False
         self._protocol_version = "2.0.0"
         self._build_command = None
         self._lib_path = None
@@ -83,6 +84,7 @@ class TypescriptLanguagePlugin(LanguagePlugin):
 
         project.settings["use_docker"] = self._use_docker
         project.settings["skip_npm_install"] = self._skip_npm_install
+        project.settings["npm_link"] = self._npm_link
         project.settings["protocolVersion"] = self._protocol_version
 
     def init(self, project: Project):
@@ -136,6 +138,9 @@ class TypescriptLanguagePlugin(LanguagePlugin):
             description=f"AWS custom resource provider named {project.type_name}.",
             lib_name=SUPPORT_LIB_NAME,
             lib_path=self._lib_path,
+            use_docker=self._use_docker,
+            schema=project.schema_filename,
+            type_configuration=project.configuration_schema_filename,
         )
         _render_template(
             project.root / "README.md",
@@ -146,6 +151,9 @@ class TypescriptLanguagePlugin(LanguagePlugin):
             lib_name=SUPPORT_LIB_NAME,
         )
         self._render_sam_template(project)
+
+        if self._npm_link:
+            run_tool_cmd("npm", ["link", SUPPORT_LIB_NAME])
 
         # install npm dependencies
         if self._skip_npm_install is False:
@@ -187,7 +195,9 @@ class TypescriptLanguagePlugin(LanguagePlugin):
                 "Target": "es2022",
                 "Sourcemap": "true",
                 "EntryPoints": ["src/handlers.ts"],
-                "External": ["@aws-sdk/*"],
+                # Necessary to ensure these aren't bundled into the handler
+                # So that they can be loaded into a worker
+                "External": ["@aws-sdk/*", "p-retry", "piscina"],
             },
         }
         sam_template = yaml.dump(
@@ -276,7 +286,7 @@ class TypescriptLanguagePlugin(LanguagePlugin):
 
         LOG.warning("Starting build")
         try:
-            LOG.debug("Running np ci --include=optional")
+            LOG.debug("Running npm ci --include=optional")
             run_tool_cmd("npm", ["ci", "--include=optional"], cwd=base_path)
 
             LOG.debug("Running sam build: sam %s", " ".join(sam_command))

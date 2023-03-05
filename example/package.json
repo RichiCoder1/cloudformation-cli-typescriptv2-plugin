@@ -1,5 +1,5 @@
 {
-  "description": "{{ description }}",
+  "description": "AWS custom resource provider named Test::Test::Test.",
   "private": true,
   "main": "dist/handlers.js",
   "files": [
@@ -7,12 +7,12 @@
   ],
   "scripts": {
     "type-check": "npx tsc",
-    "generate": "cfn-js generate --schema {{ schema }}",
-    "build": "sam build{% if use_docker %} --use-container{% endif %} --build-dir build",
+    "generate": "cfn-js generate --schema test-test-test.json",
+    "build": "sam build --build-dir build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "{{lib_name}}": "{{lib_path}}"
+    "@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib": "^2.0.0-a0"
   },
   "devDependencies": {
     "@types/node": "^18.0.0",

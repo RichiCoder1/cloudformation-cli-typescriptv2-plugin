@@ -5,9 +5,9 @@ import {
     StandardUnit,
 } from '@aws-sdk/client-cloudwatch';
 import { Logger } from 'pino';
-import Pool from 'piscina';
-import type { publishMetric } from './background';
-import { Action } from '~/event';
+import Pool from 'tinypool';
+import type { publishMetric } from './background.js';
+import { Action } from '~/event.js';
 import { isNativeError } from 'node:util/types';
 
 type PublishMetricArgs = Parameters<typeof publishMetric>;
@@ -48,8 +48,6 @@ export class MetricsPublisher {
         this.resourceNamespace = resourceType.replace(/::/g, '/');
         if (!credentials) {
             this.pool = new Pool({
-                // This is technically valid, but typescript does weird things
-                // @ts-expect-error
                 filename: new URL('./background.js', import.meta.url).href,
                 workerData: {
                     credentials: credentials,
