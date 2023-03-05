@@ -3,8 +3,11 @@ import { resource } from './generated/index.js';
 resource.handlers({
     async create(event) {
         return this.created({
-            tPSCode: 'askljda',
-            title: 'asdad',
+            // ID (from primaryIdentifies) is required
+            // Will return a type error if not provided
+            tPSCode: '123456679',
+            // Standard required properties
+            title: 'My Title',
             testCode: 'NOT_STARTED',
         });
     },
