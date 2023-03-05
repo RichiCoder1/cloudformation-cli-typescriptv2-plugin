@@ -1,0 +1,27 @@
+{
+    "extends": "@tsconfig/node18/tsconfig.json",
+    "compilerOptions": {
+        "module": "Node16",
+        "strict": true,
+        "noImplicitAny": false,
+        "strictNullChecks": false,
+        "strictPropertyInitialization": false,
+        "allowJs": true,
+        "declaration": true,
+        "removeComments": true,
+        "sourceMap": false,
+        "outDir": "dist",
+        "baseUrl": ".",
+        "paths": {
+            "~/*": [
+                "src/*"
+            ]
+        }
+    },
+    "include": [
+        "src/**/*.ts"
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}

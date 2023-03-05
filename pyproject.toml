@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=61.0","setuptools-npm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cloudformation-cli-typescriptv2-plugin"
+version = "2.0.0a0"
+authors = [
+  { name="Amazon Web Services", email="aws-cloudformation-developers@amazon.com" },
+]
+description = "The CloudFormation Resource Provider Development Kit (RPDK) allows you to author your own resource providers that can be used by CloudFormation. This plugin library helps to provide runtime bindings for the execution of your providers by CloudFormation."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Build Tools",
+  "Topic :: Software Development :: Code Generators",
+]
+dependencies = [
+  "cloudformation-cli>=0.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "bandit",
+  "black",
+  "isort",
+  "pylint",
+  "pytest",
+  "pytest-cov",
+]
+
+[project.entry-points."rpdk.v1.languages"]
+typescript = "rpdk.typescript.codegen:TypescriptLanguagePlugin"
+[project.entry-points."rpdk.v1.parsers"]
+typescript = "rpdk.typescript.parser:setup_subparser"
+
+[project.urls]
+"Homepage" = "https://github.com/richicoder1/cloudformation-cli-typescriptv2-plugin/"
+"Bug Tracker" = "https://github.com/richicoder1/cloudformation-cli-typescriptv2-plugin/issues"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-dir]
+"python.rpdk.typescript" = "rpdk.typescript"
+
+[tool.setuptools.packages.find]
+where = ["python"]
+
+[tool.setuptools.package-data]
+"rpdk.typescript.data" = ["*"]
+"rpdk.typescript.templates" = ["*"]
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+default_section = "FIRSTPARTY"
+skip = ["env"]
+combine_as_imports = true
+known_first_party = ["rpdk"]
