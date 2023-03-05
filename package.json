@@ -3,6 +3,7 @@
   "version": "2.0.0-a0",
   "description": "The CloudFormation Resource Provider Development Kit (RPDK) allows you to author your own resource providers that can be used by CloudFormation. This plugin library helps to provide runtime bindings for the execution of your providers by CloudFormation.",
   "private": false,
+  "type": "module",
   "main": "dist/index.js",
   "files": [
     "dist"
@@ -31,6 +32,7 @@
   "devDependencies": {
     "@tsconfig/node18": "^1.0.1",
     "@types/aws-lambda": "^8.10.111",
+    "@types/node": "^18.14.6",
     "camelcase-keys": "^8.0.2",
     "suretype": "^3.2.1",
     "typescript": "^4.9.5"
@@ -42,5 +44,17 @@
     "aws-sdk": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.282.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.282.0",
+    "p-queue": "^7.3.4",
+    "p-retry": "^5.1.2",
+    "pino": "^8.11.0",
+    "pino-lambda": "^4.1.0",
+    "piscina": "^3.2.0",
+    "tsup": "^6.6.3",
+    "type-fest": "^3.6.1",
+    "uuid": "^9.0.0"
   }
 }

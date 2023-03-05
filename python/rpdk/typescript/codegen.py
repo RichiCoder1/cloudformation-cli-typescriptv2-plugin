@@ -184,10 +184,10 @@ class TypescriptLanguagePlugin(LanguagePlugin):
             "BuildMethod": "esbuild",
             "BuildProperties": {
                 "Format": "esm",
-                "OutExtensions": [".js=.mjs"],
                 "Target": "es2022",
                 "Sourcemap": "true",
                 "EntryPoints": ["src/handlers.ts"],
+                "External": ["@aws-sdk/*"],
             },
         }
         sam_template = yaml.dump(

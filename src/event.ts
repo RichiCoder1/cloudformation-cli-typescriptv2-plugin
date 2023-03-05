@@ -1,4 +1,4 @@
-import { v, TypeOf } from 'suretype';
+import { v, TypeOf, ensure, compile } from 'suretype';
 
 // We all additional properties to be true on all of these to support forward evolution and not accidentally break providers.
 
@@ -10,13 +10,11 @@ export type Action = TypeOf<typeof ActionType>;
 
 const Tags = v.object({}).additional(v.string());
 
-const Credentials = v
-    .object({
-        AccessKeyId: v.string(),
-        SecretAccessKey: v.string(),
-        SessionToken: v.string(),
-    })
-    .additional(true);
+const CredentialsSchema = v.object({
+    AccessKeyId: v.string().required(),
+    SecretAccessKey: v.string().required(),
+    SessionToken: v.string(),
+});
 
 export const RequestContextSchema = v
     .object({
@@ -27,11 +25,11 @@ export const RequestContextSchema = v
     })
     .additional(true);
 
-export const RequestData = v
+export const RequestDataSchema = v
     .object({
         LogicalResourceId: v.string(),
-        CallerCredentials: Credentials,
-        ProviderCredentials: Credentials,
+        CallerCredentials: CredentialsSchema,
+        ProviderCredentials: CredentialsSchema,
         ResourceProperties: v.any(),
         OldResourceProperties: v.any(),
         PreviousResourceProperties: v.any(),
@@ -47,13 +45,17 @@ export const RequestSchema = v
         AWSAccountId: v.string(),
         Region: v.string().required(),
         BearerToken: v.string().required(),
-        Action: ActionType,
+        Action: ActionType.required(),
         ResourceType: v.string().required(),
         ResourceTypeVersion: v.string(),
         RequestType: v.string().required(),
         CallbackContext: v.any(),
         RequestContext: RequestContextSchema,
-        RequestData: RequestData,
+        RequestData: RequestDataSchema.required(),
         NextToken: v.string(),
     })
     .additional(true);
+
+export type BaseRequest = TypeOf<typeof RequestSchema>;
+
+export const ensureBaseRequest = compile(RequestSchema, { ensure: true });
