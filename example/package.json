@@ -11,9 +11,6 @@
     "build": "sam build --build-dir build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "dependencies": {
-    "@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib": "^2.0.0-a0"
-  },
   "devDependencies": {
     "@types/node": "^18.0.0",
     "tsup": "^6.6.3",
@@ -21,5 +18,8 @@
   },
   "optionalDependencies": {
     "aws-sdk": "^2.656.0"
+  },
+  "dependencies": {
+    "@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib": "^2.0.0-a0"
   }
 }

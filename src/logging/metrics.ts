@@ -6,9 +6,10 @@ import {
 } from '@aws-sdk/client-cloudwatch';
 import { Logger } from 'pino';
 import Pool from 'tinypool';
-import type { publishMetric } from './background.js';
+import type { publishMetric } from './worker.js';
 import { Action } from '~/request.js';
 import { isNativeError } from 'node:util/types';
+import { getPool } from './pool.js';
 
 type PublishMetricArgs = Parameters<typeof publishMetric>;
 
@@ -46,13 +47,8 @@ export class MetricsPublisher {
         private readonly resourceType: string
     ) {
         this.resourceNamespace = resourceType.replace(/::/g, '/');
-        if (!credentials) {
-            this.pool = new Pool({
-                filename: new URL('./background.js', import.meta.url).href,
-                workerData: {
-                    credentials: credentials,
-                },
-            });
+        if (credentials?.accessKeyId) {
+            this.pool = getPool(credentials);
         }
     }
 

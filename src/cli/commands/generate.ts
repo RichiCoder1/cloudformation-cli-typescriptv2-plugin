@@ -156,5 +156,10 @@ export const generate = (program: Program): Program =>
             `;
 
             await writeFile(join(outputDirectory, 'index.ts'), model);
+
+            const worker = dedent`
+                export * from '@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib/dist/logging/worker.js';
+            `;
+            await writeFile(join(outputDirectory, 'worker.ts'), worker);
         }
     );

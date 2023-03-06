@@ -24,7 +24,7 @@ classifiers = [
   "Topic :: Software Development :: Code Generators",
 ]
 dependencies = [
-  "cloudformation-cli>=0.2.0",
+  "cloudformation-cli>=0.2.0"
 ]
 
 [project.optional-dependencies]

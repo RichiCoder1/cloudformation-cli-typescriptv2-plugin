@@ -17,7 +17,7 @@ import {
     BaseRequest,
     ensureBaseRequest,
     TestRequestSchema,
-} from '~/request.js';
+} from './request.js';
 import { AlreadyExistsError, BaseHandlerError } from './exceptions.js';
 import {
     CreateEvent,
@@ -88,7 +88,7 @@ export interface ResourceHandlers<
     readonly delete: (
         this: THandler,
         event: DeleteEvent<TProperties, TTypeConfiguration, TPrimaryKeys>
-    ) => Promise<DeleteResult<TProperties>>;
+    ) => Promise<DeleteResult<TProperties, TPrimaryKeys>>;
 
     readonly read: (
         this: THandler,
@@ -532,7 +532,7 @@ export abstract class ResourceBuilderBase<
      * @param callbackDelayInSeconds The delay in seconds before the next callback. Default 10 seconds.
      */
     public createInProgress(
-        properties: InProgress<TProperties>['Properties'],
+        properties: InProgress<TProperties, TPrimaryKeys>['Properties'],
         options: {
             callbackContext: Record<string, string>;
             callbackDelayInSeconds?: number;
@@ -578,7 +578,7 @@ export abstract class ResourceBuilderBase<
      * @param callbackDelayInSeconds The delay in seconds before the next callback. Default 10 seconds.
      */
     public updateInProgress(
-        properties: InProgress<TProperties>['Properties'],
+        properties: InProgress<TProperties, TPrimaryKeys>['Properties'],
         options: {
             callbackContext: Record<string, string>;
             callbackDelayInSeconds?: number;

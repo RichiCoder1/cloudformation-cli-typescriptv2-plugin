@@ -9,8 +9,9 @@ import {
 import { Writable } from 'node:stream';
 import { type Logger } from 'pino';
 import Pool from 'tinypool';
-import type { publishLogMessage } from './background.js';
+import type { publishLogMessage } from './worker.js';
 import { MetricsPublisher } from './metrics.js';
+import { getPool } from './pool.js';
 
 type PublishLogMessageArgs = Parameters<typeof publishLogMessage>;
 
@@ -42,12 +43,7 @@ export class CloudWatchLogsStream extends Writable {
             logGroupName: this.logGroupName,
             logStreamName: this.logStreamName,
         });
-        this.pool = new Pool({
-            filename: new URL('./background.js', import.meta.url).href,
-            workerData: {
-                credentials: options.credentials,
-            },
-        });
+        this.pool = getPool(options.credentials);
     }
 
     async ensureLogGroup() {

@@ -8,25 +8,27 @@ import { schemaResourceProperties, schemaTypeConfiguration } from './schema';
 
 export const TypeName = 'Test::Test::Test';
 
-export const PrimaryIds = ['TPSCode'] as const;
+export const PrimaryIds = [
+  'TPSCode'
+] as const;
 export type PrimaryId = typeof PrimaryIds[number];
 
 export type PropertiesSchema = typeof schemaResourceProperties;
 export type TypeConfigurationSchema = typeof schemaTypeConfiguration;
 
 export class ResourceBuilder extends ResourceBuilderBase<
-    PropertiesSchema,
-    TypeConfigurationSchema,
-    PrimaryId
+  PropertiesSchema,
+  TypeConfigurationSchema,
+  PrimaryId
 > {
-    constructor() {
-        super({
-            typeName: TypeName,
-            schema: schemaResourceProperties,
-            typeConfigurationSchema: schemaTypeConfiguration,
-            ids: PrimaryIds,
-        });
-    }
+  constructor() {
+      super({
+          typeName: TypeName,
+          schema: schemaResourceProperties,
+          typeConfigurationSchema: schemaTypeConfiguration,
+          ids: PrimaryIds,
+      });
+  }
 }
 
 export const resourceBuilder = new ResourceBuilder();

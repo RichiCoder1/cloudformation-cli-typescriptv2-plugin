@@ -191,13 +191,12 @@ class TypescriptLanguagePlugin(LanguagePlugin):
         function_metadata = {
             "BuildMethod": "esbuild",
             "BuildProperties": {
+                "UseNpmCi": True,
                 "Format": "esm",
                 "Target": "es2022",
-                "Sourcemap": "true",
-                "EntryPoints": ["src/handlers.ts"],
-                # Necessary to ensure these aren't bundled into the handler
-                # So that they can be loaded into a worker
-                "External": ["@aws-sdk/*", "p-retry", "piscina"],
+                "Sourcemap": True,
+                "EntryPoints": ["src/handlers.ts", "src/generated/worker.ts"],
+                "External": ["@aws-sdk/*"],
             },
         }
         sam_template = yaml.dump(
@@ -213,7 +212,7 @@ class TypescriptLanguagePlugin(LanguagePlugin):
                         },
                         "Metadata": function_metadata,
                     },
-                    "TestEndpoint": {
+                    "TestEntrypoint": {
                         "Type": "AWS::Serverless::Function",
                         "Properties": {
                             **function_properties,

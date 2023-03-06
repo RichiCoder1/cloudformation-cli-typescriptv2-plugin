@@ -101,10 +101,13 @@ export type SuccessWithPropertiesResult<
     >;
 };
 
-export type InProgress<TProperties extends Input> = {
+export type InProgress<
+    TProperties extends Input,
+    TPrimaryKeys extends keyof TProperties
+> = {
     readonly Status: OperationStatus.InProgress;
     readonly Properties: Simplify<
-        PartialDeep<CamelCasedPropertiesDeep<TProperties>>
+        CamelCasedPropertiesDeep<SetRequired<TProperties, TPrimaryKeys>>
     >;
     readonly CallbackContext: Record<string, string>;
     readonly CallbackDelaySeconds: number;
@@ -117,11 +120,12 @@ export type PendableSuccessResult<
     TPrimaryKeys extends keyof TProperties
 > =
     | SuccessWithPropertiesResult<TProperties, TPrimaryKeys>
-    | InProgress<TProperties>;
+    | InProgress<TProperties, TPrimaryKeys>;
 
-export type DeleteResult<TProperties extends Input> =
-    | InProgress<TProperties>
-    | { Status: OperationStatus.Success };
+export type DeleteResult<
+    TProperties extends Input,
+    TPrimaryKeys extends keyof TProperties
+> = InProgress<TProperties, TPrimaryKeys> | { Status: OperationStatus.Success };
 
 export type ListResult<
     TProperties extends Input,
