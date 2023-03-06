@@ -109,7 +109,7 @@ export const generate = (program: Program): Program =>
             const model = dedent`
               /* tslint:disable */
               /* eslint-disable */
-              import { ResourceHandlerBase } from '@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib';
+              import { ResourceBuilderBase } from '@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib';
               import { type TypeOf } from 'suretype';
               import type { CamelCasedPropertiesDeep } from 'type-fest';
               import type { ConditionalSimplifyDeep } from 'type-fest/source/conditional-simplify';
@@ -125,7 +125,7 @@ export const generate = (program: Program): Program =>
               export type PropertiesSchema = typeof schemaResourceProperties;
               export type TypeConfigurationSchema = typeof schemaTypeConfiguration;
 
-              export class ResourceHandler extends ResourceHandlerBase<
+              export class ResourceBuilder extends ResourceBuilderBase<
                 PropertiesSchema,
                 TypeConfigurationSchema,
                 PrimaryId
@@ -140,7 +140,7 @@ export const generate = (program: Program): Program =>
                 }
               }
 
-              export const resource = new ResourceHandler();
+              export const resourceBuilder = new ResourceBuilder();
 
               export type RawProperties = ConditionalSimplifyDeep<
                   TypeOf<typeof schemaResourceProperties>

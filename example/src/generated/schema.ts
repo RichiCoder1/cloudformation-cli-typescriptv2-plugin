@@ -78,7 +78,6 @@ export const schemaResourceProperties = suretype({
     SecondCopyOfMemo: schemaMemo,
     TestCode: v.string().enum("NOT_STARTED", "CANCELLED").required(),
     Authors: v.array(v.string()),
-    SecondaryId: v.string(),
     Tags: annotate({
         description: "An array of key-value pairs to apply to this resource."
     }, v.array(schemaTag))
@@ -98,7 +97,6 @@ export interface ResourceProperties {
     SecondCopyOfMemo?: Memo;
     TestCode: "NOT_STARTED" | "CANCELLED";
     Authors?: string[];
-    SecondaryId?: string;
     /** An array of key-value pairs to apply to this resource. */
     Tags?: Tag[];
 }

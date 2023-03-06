@@ -1,4 +1,5 @@
 import { v, TypeOf, ensure, compile } from 'suretype';
+import { SimplifyDeep } from 'type-fest/source/merge-deep.js';
 
 // We all additional properties to be true on all of these to support forward evolution and not accidentally break providers.
 
@@ -43,7 +44,7 @@ export const RequestSchema = v
     .object({
         AWSAccountId: v.string(),
         Region: v.string().required(),
-        BearerToken: v.string().required(),
+        BearerToken: v.string(),
         Action: ActionType.required(),
         ResourceType: v.string().required(),
         ResourceTypeVersion: v.string(),
@@ -58,3 +59,24 @@ export const RequestSchema = v
 export type BaseRequest = TypeOf<typeof RequestSchema>;
 
 export const ensureBaseRequest = compile(RequestSchema, { ensure: true });
+
+export const TestRequestSchema = v
+    .object({
+        credentials: CredentialsSchema.required(),
+        action: ActionType.required(),
+        request: v
+            .object({
+                clientRequestToken: v.string(),
+                // Yah, I don't know why these are called this either.
+                desiredResourceState: v.any(),
+                previousResourceState: v.any(),
+                logicalResourceIdentifier: v.anyOf([v.string(), v.null()]),
+                typeConfiguration: v.any(),
+            })
+            .required(),
+        callbackContext: v.object({}).additional(true),
+        region: v.string(),
+    })
+    .additional(true);
+
+export type TestRequest = SimplifyDeep<TypeOf<typeof TestRequestSchema>>;

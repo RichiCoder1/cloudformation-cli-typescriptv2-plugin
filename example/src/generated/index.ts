@@ -1,6 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
-import { ResourceHandlerBase } from '@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib';
+import { ResourceBuilderBase } from '@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib';
 import { type TypeOf } from 'suretype';
 import type { CamelCasedPropertiesDeep } from 'type-fest';
 import type { ConditionalSimplifyDeep } from 'type-fest/source/conditional-simplify';
@@ -8,30 +8,28 @@ import { schemaResourceProperties, schemaTypeConfiguration } from './schema';
 
 export const TypeName = 'Test::Test::Test';
 
-export const PrimaryIds = [
-  'TPSCode'
-] as const;
+export const PrimaryIds = ['TPSCode'] as const;
 export type PrimaryId = typeof PrimaryIds[number];
 
 export type PropertiesSchema = typeof schemaResourceProperties;
 export type TypeConfigurationSchema = typeof schemaTypeConfiguration;
 
-export class ResourceHandler extends ResourceHandlerBase<
-  PropertiesSchema,
-  TypeConfigurationSchema,
-  PrimaryId
+export class ResourceBuilder extends ResourceBuilderBase<
+    PropertiesSchema,
+    TypeConfigurationSchema,
+    PrimaryId
 > {
-  constructor() {
-      super({
-          typeName: TypeName,
-          schema: schemaResourceProperties,
-          typeConfigurationSchema: schemaTypeConfiguration,
-          ids: PrimaryIds,
-      });
-  }
+    constructor() {
+        super({
+            typeName: TypeName,
+            schema: schemaResourceProperties,
+            typeConfigurationSchema: schemaTypeConfiguration,
+            ids: PrimaryIds,
+        });
+    }
 }
 
-export const resource = new ResourceHandler();
+export const resourceBuilder = new ResourceBuilder();
 
 export type RawProperties = ConditionalSimplifyDeep<
     TypeOf<typeof schemaResourceProperties>

@@ -20,7 +20,6 @@ To declare this entity in your AWS CloudFormation template, use the following sy
         "<a href="#secondcopyofmemo" title="SecondCopyOfMemo">SecondCopyOfMemo</a>" : <i><a href="memo.md">Memo</a></i>,
         "<a href="#testcode" title="TestCode">TestCode</a>" : <i>String</i>,
         "<a href="#authors" title="Authors">Authors</a>" : <i>[ String, ... ]</i>,
-        "<a href="#secondaryid" title="SecondaryId">SecondaryId</a>" : <i>String</i>,
         "<a href="#tags" title="Tags">Tags</a>" : <i>[ <a href="tag.md">Tag</a>, ... ]</i>
     }
 }
@@ -40,7 +39,6 @@ Properties:
     <a href="#testcode" title="TestCode">TestCode</a>: <i>String</i>
     <a href="#authors" title="Authors">Authors</a>: <i>
       - String</i>
-    <a href="#secondaryid" title="SecondaryId">SecondaryId</a>: <i>String</i>
     <a href="#tags" title="Tags">Tags</a>: <i>
       - <a href="tag.md">Tag</a></i>
 </pre>
@@ -118,16 +116,6 @@ _Update requires_: [No interruption](https://docs.aws.amazon.com/AWSCloudFormati
 _Required_: No
 
 _Type_: List of String
-
-_Update requires_: [No interruption](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-updating-stacks-update-behaviors.html#update-no-interrupt)
-
-#### SecondaryId
-
-_Required_: No
-
-_Type_: String
-
-_Pattern_: <code>^[A-Z]{3,5}[0-9]{8}-[0-9]{4}$</code>
 
 _Update requires_: [No interruption](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-updating-stacks-update-behaviors.html#update-no-interrupt)
 

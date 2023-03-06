@@ -15,7 +15,6 @@ import { Input } from './types.js';
 
 export type BaseEvent<TTypeConfiguration extends Input> = {
     readonly action: Action;
-    readonly request: BaseRequest;
     readonly logger: Logger;
     readonly typeConfiguration: CamelCasedPropertiesDeep<TTypeConfiguration>;
 };
