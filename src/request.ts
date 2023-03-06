@@ -31,7 +31,6 @@ export const RequestDataSchema = v
         CallerCredentials: CredentialsSchema,
         ProviderCredentials: CredentialsSchema,
         ResourceProperties: v.any(),
-        OldResourceProperties: v.any(),
         PreviousResourceProperties: v.any(),
         ProviderLogGroupName: v.string(),
         SystemTags: Tags,

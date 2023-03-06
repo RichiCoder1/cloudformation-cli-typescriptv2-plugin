@@ -3,8 +3,8 @@ import { MetricsPublisher } from './metrics.js';
 import { AwsCredentialIdentity } from '@aws-sdk/types';
 import { Logger, multistream, pino } from 'pino';
 import { pinoLambdaDestination } from 'pino-lambda';
-import { BaseRequest } from '~/event.js';
-import { withRequest } from './base.js';
+import { BaseRequest } from '~/request.js';
+import { defaultRedaction, defaultLogger, withRequest } from './base.js';
 import { CloudWatchLogsStream } from './cloudwatch-stream.js';
 import camelcaseKeys from 'camelcase-keys';
 
@@ -16,7 +16,19 @@ export async function getInstrumentation(
     withRequest(request, context);
 
     const lambdaDestination = pinoLambdaDestination();
-    const resourceType = request.RequestType;
+    const resourceType = request.ResourceType;
+    const version = request.ResourceTypeVersion;
+
+    const childContext = {
+        cloudformation: {
+            action: request.Action,
+            resourceType: resourceType,
+            version,
+            // Should we log account id?
+            region: request.Region,
+            stackId: request.StackId,
+        },
+    };
 
     let providerCredentials = request.RequestData?.ProviderCredentials;
     let credentials: AwsCredentialIdentity | null = null;
@@ -27,7 +39,7 @@ export async function getInstrumentation(
     const metrics = new MetricsPublisher(log, credentials, resourceType);
 
     if (!credentials) {
-        return [pino({}, lambdaDestination), metrics];
+        return [defaultLogger.child(childContext), metrics];
     }
 
     const prefix = getCloudWatchPrefix(request.RequestType, request);
@@ -44,10 +56,16 @@ export async function getInstrumentation(
     } catch (e) {
         log.error(e, 'Error ensuring log group');
         metrics.publishExceptionMetric(new Date(), request.Action!, e);
-        return [pino({}, lambdaDestination), metrics];
+        return [defaultLogger.child(childContext), metrics];
     }
 
-    const requestLogger = pino({}, multistream([logStream, lambdaDestination]));
+    const requestLogger = pino(
+        {
+            redact: defaultRedaction,
+            base: childContext,
+        },
+        multistream([logStream, lambdaDestination])
+    );
     return [requestLogger, metrics];
 }
 

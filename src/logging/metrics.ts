@@ -7,7 +7,7 @@ import {
 import { Logger } from 'pino';
 import Pool from 'tinypool';
 import type { publishMetric } from './background.js';
-import { Action } from '~/event.js';
+import { Action } from '~/request.js';
 import { isNativeError } from 'node:util/types';
 
 type PublishMetricArgs = Parameters<typeof publishMetric>;
