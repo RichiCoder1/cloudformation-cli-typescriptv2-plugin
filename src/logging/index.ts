@@ -6,7 +6,6 @@ import { pinoLambdaDestination } from 'pino-lambda';
 import { BaseRequest } from '~/request.js';
 import { defaultRedaction, defaultLogger, withRequest } from './base.js';
 import { CloudWatchLogsStream } from './cloudwatch-stream.js';
-import camelcaseKeys from '../utils/camelcaseKeys.js';
 
 export async function getInstrumentation(
     request: BaseRequest,
@@ -33,7 +32,11 @@ export async function getInstrumentation(
     let providerCredentials = request.RequestData?.ProviderCredentials;
     let credentials: AwsCredentialIdentity | null = null;
     if (providerCredentials && providerCredentials.AccessKeyId) {
-        credentials = camelcaseKeys(providerCredentials);
+        credentials = {
+            accessKeyId: providerCredentials.AccessKeyId,
+            secretAccessKey: providerCredentials.SecretAccessKey,
+            sessionToken: providerCredentials.SessionToken,
+        };
     }
 
     const metrics = new MetricsPublisher(log, credentials, resourceType);

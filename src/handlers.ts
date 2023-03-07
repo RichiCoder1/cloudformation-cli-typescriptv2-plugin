@@ -1,14 +1,7 @@
 import { Action } from './request.js';
 import { OperationStatus } from './response.js';
-import { BaseRequest } from '~/request.js';
 import { Logger } from 'pino';
-import {
-    PartialDeep,
-    SetRequired,
-    Simplify,
-    CamelCasedPropertiesDeep,
-    CamelCase,
-} from 'type-fest';
+import { SetRequired, Simplify } from 'type-fest';
 import { Input } from './types.js';
 
 // I apologize to anyone who has to read this code.
@@ -17,7 +10,7 @@ import { Input } from './types.js';
 export type BaseEvent<TTypeConfiguration extends Input> = {
     readonly action: Action;
     readonly logger: Logger;
-    readonly typeConfiguration: CamelCasedPropertiesDeep<TTypeConfiguration>;
+    readonly typeConfiguration: TTypeConfiguration;
 };
 
 export type CreateEvent<
@@ -26,9 +19,7 @@ export type CreateEvent<
     TPrimaryKeys extends keyof TProperties
 > = BaseEvent<TTypeConfiguration> & {
     readonly action: 'CREATE';
-    readonly properties: Simplify<
-        CamelCasedPropertiesDeep<Omit<TProperties, TPrimaryKeys>>
-    >;
+    readonly properties: Simplify<Omit<TProperties, TPrimaryKeys>>;
 };
 
 export type CreateCallbackEvent<
@@ -45,11 +36,9 @@ export type UpdateEvent<
     TPrimaryKeys extends keyof TProperties
 > = BaseEvent<TTypeConfiguration> & {
     readonly action: 'UPDATE';
-    readonly properties: Simplify<
-        CamelCasedPropertiesDeep<SetRequired<TProperties, TPrimaryKeys>>
-    >;
+    readonly properties: Simplify<SetRequired<TProperties, TPrimaryKeys>>;
     readonly previousProperties: Simplify<
-        CamelCasedPropertiesDeep<SetRequired<TProperties, TPrimaryKeys>>
+        SetRequired<TProperties, TPrimaryKeys>
     >;
 };
 
@@ -67,9 +56,7 @@ export type DeleteEvent<
     TPrimaryKeys extends keyof TProperties
 > = BaseEvent<TTypeConfiguration> & {
     readonly action: 'DELETE';
-    readonly properties: Simplify<
-        CamelCasedPropertiesDeep<SetRequired<TProperties, TPrimaryKeys>>
-    >;
+    readonly properties: Simplify<SetRequired<TProperties, TPrimaryKeys>>;
 };
 
 export type ReadEvent<
@@ -78,9 +65,7 @@ export type ReadEvent<
     TPrimaryKeys extends keyof TProperties
 > = BaseEvent<TTypeConfiguration> & {
     readonly action: 'READ';
-    readonly properties: Simplify<
-        CamelCasedPropertiesDeep<Pick<TProperties, TPrimaryKeys>>
-    >;
+    readonly properties: Simplify<Pick<TProperties, TPrimaryKeys>>;
 };
 
 export type ListEvent<
@@ -97,9 +82,7 @@ export type SuccessWithPropertiesResult<
     TPrimaryKeys extends keyof TProperties
 > = {
     readonly Status: OperationStatus.Success;
-    readonly Properties: Simplify<
-        CamelCasedPropertiesDeep<SetRequired<TProperties, TPrimaryKeys>>
-    >;
+    readonly Properties: Simplify<SetRequired<TProperties, TPrimaryKeys>>;
 };
 
 export type InProgress<
@@ -107,9 +90,7 @@ export type InProgress<
     TPrimaryKeys extends keyof TProperties
 > = {
     readonly Status: OperationStatus.InProgress;
-    readonly Properties: Simplify<
-        CamelCasedPropertiesDeep<SetRequired<TProperties, TPrimaryKeys>>
-    >;
+    readonly Properties: Simplify<SetRequired<TProperties, TPrimaryKeys>>;
     readonly CallbackContext: Record<string, string>;
     readonly CallbackDelaySeconds: number;
     readonly Message?: string;
@@ -133,8 +114,6 @@ export type ListResult<
     TPrimaryKeys extends keyof TProperties
 > = {
     readonly Status: OperationStatus.Success;
-    readonly ResourceModels: CamelCasedPropertiesDeep<
-        SetRequired<TProperties, TPrimaryKeys>
-    >[];
+    readonly ResourceModels: SetRequired<TProperties, TPrimaryKeys>[];
     readonly NextToken: string | null;
 };

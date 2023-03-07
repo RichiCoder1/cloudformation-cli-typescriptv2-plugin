@@ -12,9 +12,13 @@ import { suretype, v, annotate } from 'suretype';
 /** The validation schema for a TypeConfiguration */
 export const schemaTypeConfiguration = suretype({
     name: "TypeConfiguration"
-}, v.object({}));
+}, v.object({
+    ApiKey: v.string()
+}).additional(true));
 
 export interface TypeConfiguration {
+    ApiKey?: string;
+    [key: string]: unknown;
 }
 
 /** The validation schema for a Tag */

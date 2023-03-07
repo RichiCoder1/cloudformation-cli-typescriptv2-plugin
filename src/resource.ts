@@ -4,12 +4,7 @@ import assert from 'node:assert';
 import { isNativeError } from 'node:util/types';
 import { Logger, stdSerializers } from 'pino';
 import { ensure, ObjectValidator, TypeOf, ValidationError } from 'suretype';
-import {
-    CamelCasedPropertiesDeep,
-    PascalCasedPropertiesDeep,
-    SetRequired,
-} from 'type-fest';
-import camelcaseKeys from './utils/camelcaseKeys.js';
+import { SetRequired } from 'type-fest';
 import {
     Action,
     BaseRequest,
@@ -37,56 +32,31 @@ import { Input } from './types.js';
 
 const errorFormatter = stdSerializers.err;
 
-function toJs<In>(
-    input: In,
-    schema?: ObjectValidator<unknown>
-): CamelCasedPropertiesDeep<In> {
-    const result = camelcaseKeys(input, {
-        preserveConsecutiveUppercase: true,
-    }) as any;
-    if (process.env.NODE_ENV === 'dev') {
-        ensure(schema, result, {
-            ajvOptions: {
-                coerceTypes: true,
-            },
-        });
-    }
-    return result;
-}
-
-function fromJs<In>(
-    input: In,
-    schema?: ObjectValidator<unknown>
-): PascalCasedPropertiesDeep<In> {
-    const result = camelcaseKeys(input, {
-        preserveConsecutiveUppercase: true,
-        pascalCase: true,
-    }) as any;
-    if (process.env.NODE_ENV === 'dev') {
-        ensure(schema, result, {
-            ajvOptions: {
-                coerceTypes: true,
-            },
-        });
-    }
-    return result;
-}
-
 export interface ResourceHandlerProperties<
     TProperties extends ObjectValidator<unknown>,
     TTypeConfiguration extends ObjectValidator<unknown> = BaseRequest['RequestData']['TypeConfiguration'],
-    TPrimaryKeys extends keyof TypeOf<TProperties> = never
+    TPrimaryKeys extends keyof TTransformedProperties = never,
+    TTransformedProperties extends Input = TypeOf<TProperties>,
+    TTransformedTypeConfiguration extends Input = TypeOf<TTypeConfiguration>
 > {
     readonly typeName: string;
     readonly schema: TProperties;
     readonly ids: readonly TPrimaryKeys[];
     readonly typeConfigurationSchema: TTypeConfiguration;
+    readonly transformProperties?: {
+        toJS: (properties: unknown) => TTransformedProperties;
+        fromJS: (properties: unknown) => TypeOf<TProperties>;
+    };
+    readonly transformTypeConfiguration?: {
+        toJS: (properties: unknown) => TTransformedTypeConfiguration;
+        fromJS: (properties: unknown) => TypeOf<TTypeConfiguration>;
+    };
 }
 
 export interface ResourceHandlers<
     TPropertiesSchema extends ObjectValidator<unknown>,
     TTypeConfigurationSchema extends ObjectValidator<unknown>,
-    TPrimaryKeys extends keyof TypeOf<TPropertiesSchema>,
+    TPrimaryKeys extends keyof TProperties,
     // These are defined to help simplify later types
     TProperties extends Input = TypeOf<TPropertiesSchema>,
     TTypeConfiguration extends Input = TypeOf<TTypeConfigurationSchema>,
@@ -146,10 +116,10 @@ interface GenericRequestEvent {
 export abstract class ResourceBuilderBase<
     TPropertiesSchema extends ObjectValidator<unknown>,
     TTypeConfigurationSchema extends ObjectValidator<unknown>,
-    TPrimaryKeys extends keyof TypeOf<TPropertiesSchema>,
+    TPrimaryKeys extends keyof TProperties,
     // These are defined to help simplify later types
-    TProperties extends Input = TypeOf<TPropertiesSchema>,
-    TTypeConfiguration extends Input = TypeOf<TTypeConfigurationSchema>
+    TProperties extends Input,
+    TTypeConfiguration extends Input
 > {
     #handlers: ResourceHandlers<
         TPropertiesSchema,
@@ -175,7 +145,9 @@ export abstract class ResourceBuilderBase<
         private readonly options: ResourceHandlerProperties<
             TPropertiesSchema,
             TTypeConfigurationSchema,
-            TPrimaryKeys
+            TPrimaryKeys,
+            TProperties,
+            TTypeConfiguration
         >
     ) {
         this.typeName = options.typeName;
@@ -209,7 +181,7 @@ export abstract class ResourceBuilderBase<
                 resourceProperties: testData.request.desiredResourceState,
                 oldResourceProperties: testData.request.previousResourceState,
                 typeConfiguration: testData.request.typeConfiguration,
-                credentials: toJs(testData.credentials),
+                credentials: testData.credentials,
             });
 
             // In dev, validate the outgoing models to identify errors earlier
@@ -240,9 +212,12 @@ export abstract class ResourceBuilderBase<
             );
             this.#logger = logger;
             this.#metrics = metrics;
-            const credentials = toJs(
-                baseRequest.RequestData.CallerCredentials!
-            );
+            const callerCredentials = baseRequest.RequestData.CallerCredentials;
+            const credentials = {
+                accessKeyId: callerCredentials?.AccessKeyId,
+                secretAccessKey: callerCredentials?.SecretAccessKey,
+                sessionToken: callerCredentials?.SessionToken,
+            } satisfies AwsCredentialIdentity;
             return await this.#handleRequest({
                 action: baseRequest.Action,
                 resourceProperties: baseRequest.RequestData.ResourceProperties!,
@@ -311,21 +286,26 @@ export abstract class ResourceBuilderBase<
         const createHandler = this.#handlers!.create.bind(this);
         const result = await createHandler({
             action,
-            properties: toJs(properties) as any,
+            properties: this.options.transformProperties.toJS(properties),
             logger: this.#logger,
-            typeConfiguration: toJs(typeConfiguration) as any,
+            typeConfiguration:
+                this.options.transformTypeConfiguration.toJS(typeConfiguration),
         });
         if (result.Status === OperationStatus.Success) {
             return {
                 Status: result.Status,
-                ResourceModel: fromJs(result.Properties),
+                ResourceModel: this.options.transformProperties.fromJS(
+                    result.Properties
+                ),
             };
         } else {
             return {
                 Status: result.Status,
                 Message: result.Message,
                 ErrorCode: result.ErrorCode,
-                ResourceModel: fromJs(result.Properties),
+                ResourceModel: this.options.transformProperties.fromJS(
+                    result.Properties
+                ),
                 CallbackContext: result.CallbackContext ?? {},
             };
         }
@@ -353,22 +333,32 @@ export abstract class ResourceBuilderBase<
         const updateHandler = this.#handlers!.update.bind(this);
         const result = await updateHandler({
             action: action,
-            properties: toJs(properties) as any,
-            previousProperties: toJs(oldProperties) as any,
+            properties: this.options.transformProperties.toJS(
+                properties
+            ) as any,
+            previousProperties: this.options.transformProperties.toJS(
+                oldProperties
+            ) as any,
             logger: this.#logger,
-            typeConfiguration: toJs(typeConfiguration) as any,
+            typeConfiguration: this.options.transformTypeConfiguration.toJS(
+                typeConfiguration
+            ) as any,
         });
         if (result.Status === OperationStatus.Success) {
             return {
                 Status: result.Status,
-                ResourceModel: fromJs(result.Properties),
+                ResourceModel: this.options.transformProperties.toJS(
+                    result.Properties
+                ),
             };
         } else {
             return {
                 Status: result.Status,
                 Message: result.Message,
                 ErrorCode: result.ErrorCode,
-                ResourceModel: fromJs(result.Properties),
+                ResourceModel: this.options.transformProperties.toJS(
+                    result.Properties
+                ),
                 CallbackContext: result.CallbackContext ?? {},
             };
         }
@@ -391,9 +381,13 @@ export abstract class ResourceBuilderBase<
         const deleteHandler = this.#handlers!.delete.bind(this);
         const result = await deleteHandler({
             action: action,
-            properties: toJs(properties) as any,
+            properties: this.options.transformProperties.toJS(
+                properties
+            ) as any,
             logger: this.#logger,
-            typeConfiguration: toJs(typeConfiguration) as any,
+            typeConfiguration: this.options.transformTypeConfiguration.toJS(
+                typeConfiguration
+            ) as any,
         });
         if (result.Status === OperationStatus.Success) {
             return {
@@ -404,7 +398,9 @@ export abstract class ResourceBuilderBase<
                 Status: result.Status,
                 Message: result.Message,
                 ErrorCode: result.ErrorCode,
-                ResourceModel: fromJs(result.Properties),
+                ResourceModel: this.options.transformProperties.toJS(
+                    result.Properties
+                ),
                 CallbackContext: result.CallbackContext ?? {},
             };
         }
@@ -427,13 +423,19 @@ export abstract class ResourceBuilderBase<
         const readHandler = this.#handlers!.read.bind(this);
         const result = await readHandler({
             action: action,
-            properties: toJs(properties) as any,
+            properties: this.options.transformProperties.toJS(
+                properties
+            ) as any,
             logger: this.#logger,
-            typeConfiguration: toJs(typeConfiguration) as any,
+            typeConfiguration: this.options.transformTypeConfiguration.toJS(
+                typeConfiguration
+            ) as any,
         });
         return {
             Status: result.Status,
-            ResourceModel: fromJs(result.Properties),
+            ResourceModel: this.options.transformProperties.toJS(
+                result.Properties
+            ),
         };
     }
 
@@ -450,11 +452,15 @@ export abstract class ResourceBuilderBase<
         const result = await listHandler({
             action: action,
             logger: this.#logger,
-            typeConfiguration: toJs(typeConfiguration) as any,
+            typeConfiguration: this.options.transformTypeConfiguration.toJS(
+                typeConfiguration
+            ) as any,
         });
         return {
             Status: result.Status,
-            ResourceModels: fromJs(result.ResourceModels),
+            ResourceModels: result.ResourceModels.map((model) =>
+                this.options.transformProperties.fromJS(model)
+            ),
         };
     }
 
@@ -509,9 +515,7 @@ export abstract class ResourceBuilderBase<
      * @param properties The full properties of the resource, including the id(s).
      */
     public created(
-        properties: CamelCasedPropertiesDeep<
-            SetRequired<TProperties, TPrimaryKeys>
-        >
+        properties: SetRequired<TProperties, TPrimaryKeys>
     ): PendableSuccessResult<TProperties, TPrimaryKeys> {
         return {
             Status: OperationStatus.Success as const,
@@ -556,9 +560,7 @@ export abstract class ResourceBuilderBase<
     }
 
     public updated(
-        properties: CamelCasedPropertiesDeep<
-            SetRequired<TProperties, TPrimaryKeys>
-        >
+        properties: SetRequired<TProperties, TPrimaryKeys>
     ): PendableSuccessResult<TProperties, TPrimaryKeys> {
         return {
             Status: OperationStatus.Success as const,
@@ -606,11 +608,7 @@ export abstract class ResourceBuilderBase<
      * Returns the result of a read operation
      * @param properties The full properties of the resource, including the id(s).
      */
-    public readResult(
-        properties: CamelCasedPropertiesDeep<
-            SetRequired<TProperties, TPrimaryKeys>
-        >
-    ) {
+    public readResult(properties: SetRequired<TProperties, TPrimaryKeys>) {
         return {
             Status: OperationStatus.Success,
             Properties: properties,
@@ -618,9 +616,7 @@ export abstract class ResourceBuilderBase<
     }
 
     public listResult(
-        properties: CamelCasedPropertiesDeep<
-            SetRequired<TProperties, TPrimaryKeys>
-        >[],
+        properties: SetRequired<TProperties, TPrimaryKeys>[],
         nextToken: string | null
     ): ListResult<TProperties, TPrimaryKeys> {
         return {

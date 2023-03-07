@@ -124,5 +124,13 @@
     "list": {
       "permissions": ["initech:ListReports"]
     }
+  },
+  "typeConfiguration": {
+    "type": "object",
+    "properties": {
+      "ApiKey": {
+        "type": "string"
+      }
+    }
   }
 }

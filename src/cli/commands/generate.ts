@@ -1,6 +1,38 @@
 import { Program } from '../program.js';
 import { join } from 'path';
-import camelcaseKeys from '../../utils/camelcaseKeys.js';
+import {
+    quicktype,
+    InputData,
+    JSONSchemaInput,
+    FetchingJSONSchemaStore,
+} from 'quicktype-core';
+import { legalizeName } from 'quicktype-core/dist/language/JavaScript.js';
+import { isES3IdentifierStart } from 'quicktype-core/dist/language/JavaScriptUnicodeMaps.js';
+import {
+    splitIntoWords,
+    combineWords,
+    allLowerWordStyle,
+    firstUpperWordStyle,
+} from 'quicktype-core/dist/support/Strings.js';
+import {
+    acronymStyle,
+    AcronymStyleOptions,
+} from 'quicktype-core/dist/support/Acronyms.js';
+
+const jsifier = (original: string) => {
+    const acronyms = acronymStyle(AcronymStyleOptions.Pascal);
+    const words = splitIntoWords(original);
+    return combineWords(
+        words,
+        legalizeName,
+        allLowerWordStyle,
+        firstUpperWordStyle,
+        allLowerWordStyle,
+        acronyms,
+        '',
+        isES3IdentifierStart
+    );
+};
 
 export const generate = (program: Program): Program =>
     program.command(
@@ -73,10 +105,16 @@ export const generate = (program: Program): Program =>
             const schemaJson = await readJson(schema, 'utf8');
 
             // Modify the schema to make it work with suretype, as well as do some extra validation steps
-            const { definitions, ...resource } = schemaJson;
+            const { definitions, ...resource } = structuredClone(schemaJson);
             resource.type = 'object';
             resource.additionalProperties = false;
             definitions['ResourceProperties'] = resource;
+
+            const typeConfigurationSchema =
+                resource.typeConfiguration ??
+                extractSingleJsonSchema(v.object({}).additional(false)).schema;
+
+            definitions['TypeConfiguration'] = typeConfigurationSchema;
 
             const idPaths: string[] = resource['primaryIdentifier'];
             const requiredIds = new Set<string>();
@@ -101,10 +139,6 @@ export const generate = (program: Program): Program =>
                 requiredIds.add(path[1]);
             }
 
-            definitions['TypeConfiguration'] =
-                resource.typeConfiguration ??
-                extractSingleJsonSchema(v.object({}).additional(false)).schema;
-
             const { data } = await convert({ data: { definitions } as any });
 
             await writeFile(join(outputDirectory, 'schema.ts'), data, 'utf8');
@@ -114,12 +148,16 @@ export const generate = (program: Program): Program =>
               /* eslint-disable */
               import { ResourceBuilderBase } from '@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib';
               import { schemaResourceProperties, schemaTypeConfiguration } from './schema.js';
-              import { schemaResourceProperties as casedProperties, schemaTypeConfiguration as casedSchema } from './js-schema.js';
+              import {
+                  Convert,
+                  TransformedResourceProperties,
+                  TransformedTypeConfiguration,
+              } from './transformer.js';
 
               export const TypeName = '${schemaJson.typeName}';
 
               export const PrimaryIds = [
-                ${[...requiredIds].map((id) => `'${id}'`).join(',\n')}
+                ${[...requiredIds].map((id) => `'${jsifier(id)}'`).join(',\n')}
               ] as const;
               export type PrimaryId = typeof PrimaryIds[number];
 
@@ -129,7 +167,9 @@ export const generate = (program: Program): Program =>
               export class ResourceBuilder extends ResourceBuilderBase<
                 PropertiesSchema,
                 TypeConfigurationSchema,
-                PrimaryId
+                PrimaryId,
+                TransformedResourceProperties,
+                TransformedTypeConfiguration
               > {
                 constructor() {
                     super({
@@ -137,6 +177,14 @@ export const generate = (program: Program): Program =>
                         schema: schemaResourceProperties.additional(false),
                         typeConfigurationSchema: schemaTypeConfiguration.additional(false),
                         ids: PrimaryIds,
+                        transformProperties: {
+                            toJS: Convert.toTransformedResourceProperties,
+                            fromJS: Convert.transformedResourcePropertiesToJson,
+                        },
+                        transformTypeConfiguration: {
+                            toJS: Convert.toTransformedTypeConfiguration,
+                            fromJS: Convert.transformedTypeConfigurationToJson,
+                        },
                     });
                 }
               }
@@ -148,32 +196,66 @@ export const generate = (program: Program): Program =>
 
             await writeFile(join(outputDirectory, 'index.ts'), model);
 
-            const { convert: camelcasedConvert } = makeConverter(
-                reader,
-                writer,
-                {
-                    transform: (doc) => {
-                        for (const type of doc.types) {
-                            if (type.type === 'object') {
-                                type.properties = camelcaseKeys(
-                                    type.properties,
-                                    {
-                                        preserveConsecutiveUppercase: true,
-                                    }
-                                );
-                            }
-                        }
-                        return doc;
-                    },
-                }
+            const quickTypeSchema = structuredClone(schemaJson);
+            quickTypeSchema.type = 'object';
+            quickTypeSchema.additionalProperties = false;
+            quickTypeSchema.definitions['TypeConfiguration'] =
+                typeConfigurationSchema;
+            const schemaInput = new JSONSchemaInput(
+                new FetchingJSONSchemaStore()
             );
-            const { data: camelcasedData } = await camelcasedConvert({
-                data: { definitions } as any,
+
+            // We could add multiple schemas for multiple types,
+            // but here we're just making one type from JSON schema.
+            await schemaInput.addSource({
+                name: 'TransformedResourceProperties',
+                schema: JSON.stringify(quickTypeSchema),
             });
+            await schemaInput.addSource({
+                name: 'TransformedTypeConfiguration',
+                schema: JSON.stringify(typeConfigurationSchema),
+            });
+
+            const inputData = new InputData();
+            inputData.addInput(schemaInput);
+
+            const result = await quicktype({
+                inputData,
+                lang: 'typescript',
+                rendererOptions: {
+                    converters: 'all-objects',
+                    'raw-type': 'any',
+                    'nice-property-names': 'true',
+                    'prefer-unions': 'true',
+                    'acronym-style': 'camel',
+                },
+            });
+
+            const transformer = dedent`
+            /* tslint:disable */
+            /* eslint-disable */
+            /**
+             * This file is generated by quicktype on behalf of cloudformation-cli-typescript-plugin, DO NOT EDIT.
+             * For more information, see:
+             *  - {@link https://github.com/quicktype/quicktype}
+             *  - {@link https://github.com/aws-cloudformation/cloudformation-cli-typescript-plugin}
+             */
+            ${fixupQuicktype(result.lines)}
+            `;
+
             await writeFile(
-                join(outputDirectory, 'js-schema.ts'),
-                camelcasedData,
+                join(outputDirectory, 'transformer.ts'),
+                transformer,
                 'utf8'
             );
+
+            function fixupQuicktype(lines: string[]) {
+                let aggregated = lines.join('\n');
+                aggregated = aggregated.replace(
+                    /props: \[\], additional/i,
+                    'props: [] as any[], additional'
+                );
+                return aggregated;
+            }
         }
     );

@@ -1,1 +1,1 @@
-export type Input = Record<string | number | symbol, unknown>;
+export type Input = { [key: string]: any };

@@ -80,7 +80,7 @@ export const TestRequestSchema = v
                 typeConfiguration: v.any(),
             })
             .required(),
-        callbackContext: v.object({}).additional(true),
+        callbackContext: v.anyOf([v.object({}).additional(true), v.null()]),
         region: v.string(),
     })
     .additional(true);
