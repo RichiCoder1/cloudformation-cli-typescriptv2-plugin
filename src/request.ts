@@ -62,7 +62,13 @@ export const ensureBaseRequest = compile(RequestSchema, { ensure: true });
 
 export const TestRequestSchema = v
     .object({
-        credentials: CredentialsSchema.required(),
+        credentials: v
+            .object({
+                accessKeyId: v.string().required(),
+                secretAccessKey: v.string().required(),
+                sessionToken: v.string(),
+            })
+            .required(),
         action: ActionType.required(),
         request: v
             .object({

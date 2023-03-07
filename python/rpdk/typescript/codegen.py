@@ -133,6 +133,10 @@ class TypescriptLanguagePlugin(LanguagePlugin):
         _copy_resource(sam_tests_folder / "create.json")
         _copy_resource(project.root / "tsconfig.json")
         _render_template(
+            project.root / "tsup.config.ts",
+            lib_name=SUPPORT_LIB_NAME,
+        )
+        _render_template(
             project.root / "package.json",
             name=project.hypenated_name,
             description=f"AWS custom resource provider named {project.type_name}.",
@@ -189,14 +193,8 @@ class TypescriptLanguagePlugin(LanguagePlugin):
         }
 
         function_metadata = {
-            "BuildMethod": "esbuild",
             "BuildProperties": {
                 "UseNpmCi": True,
-                "Format": "esm",
-                "Target": "es2022",
-                "Sourcemap": True,
-                "EntryPoints": ["src/handlers.ts", "src/generated/worker.ts"],
-                "External": ["@aws-sdk/*"],
             },
         }
         sam_template = yaml.dump(
@@ -288,8 +286,8 @@ class TypescriptLanguagePlugin(LanguagePlugin):
             LOG.debug("Running npm ci --include=optional")
             run_tool_cmd("npm", ["ci", "--include=optional"], cwd=base_path)
 
-            LOG.debug("Running sam build: sam %s", " ".join(sam_command))
-            run_tool_cmd("sam", sam_command, cwd=base_path)
+            LOG.debug("Running npm build")
+            run_tool_cmd("npm", ["build"], cwd=base_path)
         except (FileNotFoundError, CalledProcessError, InternalError) as e:
             raise DownstreamError("local build failed") from e
 

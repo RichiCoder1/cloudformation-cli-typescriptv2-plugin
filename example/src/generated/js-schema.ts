@@ -22,10 +22,10 @@ export const schemaTag = suretype({
     name: "Tag",
     description: "A key-value pair to associate with a resource."
 }, v.object({
-    Key: annotate({
+    key: annotate({
         description: "The key name of the tag. You can specify a value that is 1 to 128 Unicode characters in length and cannot be prefixed with aws:. You can use any of the following characters: the set of Unicode letters, digits, whitespace, _, ., /, =, +, and -."
     }, v.string().required()),
-    Value: annotate({
+    value: annotate({
         description: "The value for the tag. You can specify a value that is 0 to 256 Unicode characters in length and cannot be prefixed with aws:. You can use any of the following characters: the set of Unicode letters, digits, whitespace, _, ., /, =, +, and -."
     }, v.string().required())
 }));
@@ -33,22 +33,22 @@ export const schemaTag = suretype({
 /** A key-value pair to associate with a resource. */
 export interface Tag {
     /** The key name of the tag. You can specify a value that is 1 to 128 Unicode characters in length and cannot be prefixed with aws:. You can use any of the following characters: the set of Unicode letters, digits, whitespace, _, ., /, =, +, and -. */
-    Key: string;
+    key: string;
     /** The value for the tag. You can specify a value that is 0 to 256 Unicode characters in length and cannot be prefixed with aws:. You can use any of the following characters: the set of Unicode letters, digits, whitespace, _, ., /, =, +, and -. */
-    Value: string;
+    value: string;
 }
 
 /** The validation schema for a Memo */
 export const schemaMemo = suretype({
     name: "Memo"
 }, v.object({
-    Heading: v.string(),
-    Body: v.string()
+    heading: v.string(),
+    body: v.string()
 }));
 
 export interface Memo {
-    Heading?: string;
-    Body?: string;
+    heading?: string;
+    body?: string;
 }
 
 /** The validation schema for a InitechDateFormat */
@@ -66,20 +66,20 @@ export const schemaResourceProperties = suretype({
     TPSCode: annotate({
         description: "A TPS Code is automatically generated on creation and assigned as the unique identifier."
     }, v.string()),
-    Title: annotate({
+    title: annotate({
         description: "The title of the TPS report is a mandatory element."
     }, v.string().required()),
-    CoverSheetIncluded: annotate({
+    coverSheetIncluded: annotate({
         description: "Required for all TPS Reports submitted after 2/19/1999"
     }, v.boolean()),
-    DueDate: schemaInitechDateFormat,
-    ApprovalDate: schemaInitechDateFormat,
-    Memo: schemaMemo,
-    SecondCopyOfMemo: schemaMemo,
-    TestCode: v.string().enum("NOT_STARTED", "CANCELLED").required(),
-    Authors: v.array(v.string()),
-    Multipliers: v.anyOf([v.array(v.number()), v.null()]),
-    Tags: annotate({
+    dueDate: schemaInitechDateFormat,
+    approvalDate: schemaInitechDateFormat,
+    memo: schemaMemo,
+    secondCopyOfMemo: schemaMemo,
+    testCode: v.string().enum("NOT_STARTED", "CANCELLED").required(),
+    authors: v.array(v.string()),
+    multipliers: v.anyOf([v.array(v.number()), v.null()]),
+    tags: annotate({
         description: "An array of key-value pairs to apply to this resource."
     }, v.array(schemaTag))
 }));
@@ -89,16 +89,16 @@ export interface ResourceProperties {
     /** A TPS Code is automatically generated on creation and assigned as the unique identifier. */
     TPSCode?: string;
     /** The title of the TPS report is a mandatory element. */
-    Title: string;
+    title: string;
     /** Required for all TPS Reports submitted after 2/19/1999 */
-    CoverSheetIncluded?: boolean;
-    DueDate?: InitechDateFormat;
-    ApprovalDate?: InitechDateFormat;
-    Memo?: Memo;
-    SecondCopyOfMemo?: Memo;
-    TestCode: "NOT_STARTED" | "CANCELLED";
-    Authors?: string[];
-    Multipliers?: number[] | null;
+    coverSheetIncluded?: boolean;
+    dueDate?: InitechDateFormat;
+    approvalDate?: InitechDateFormat;
+    memo?: Memo;
+    secondCopyOfMemo?: Memo;
+    testCode: "NOT_STARTED" | "CANCELLED";
+    authors?: string[];
+    multipliers?: number[] | null;
     /** An array of key-value pairs to apply to this resource. */
-    Tags?: Tag[];
+    tags?: Tag[];
 }

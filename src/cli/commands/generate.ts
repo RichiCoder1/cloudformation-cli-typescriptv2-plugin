@@ -1,5 +1,6 @@
 import { Program } from '../program.js';
 import { join } from 'path';
+import camelcaseKeys from '../../utils/camelcaseKeys.js';
 
 export const generate = (program: Program): Program =>
     program.command(
@@ -57,7 +58,7 @@ export const generate = (program: Program): Program =>
             const reader = getJsonSchemaReader();
             const writer = getSureTypeWriter({
                 useUnknown: true,
-                unsupported: 'warn',
+                unsupported: 'error',
                 missingReference: 'error',
                 userPackage: 'cloudformation-cli-typescript-plugin',
                 userPackageUrl:
@@ -66,6 +67,7 @@ export const generate = (program: Program): Program =>
                 exportEnsurer: false,
                 exportTypeGuard: false,
             });
+
             const { convert } = makeConverter(reader, writer);
 
             const schemaJson = await readJson(schema, 'utf8');
@@ -73,6 +75,7 @@ export const generate = (program: Program): Program =>
             // Modify the schema to make it work with suretype, as well as do some extra validation steps
             const { definitions, ...resource } = schemaJson;
             resource.type = 'object';
+            resource.additionalProperties = false;
             definitions['ResourceProperties'] = resource;
 
             const idPaths: string[] = resource['primaryIdentifier'];
@@ -110,10 +113,8 @@ export const generate = (program: Program): Program =>
               /* tslint:disable */
               /* eslint-disable */
               import { ResourceBuilderBase } from '@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib';
-              import { type TypeOf } from 'suretype';
-              import type { CamelCasedPropertiesDeep } from 'type-fest';
-              import type { ConditionalSimplifyDeep } from 'type-fest/source/conditional-simplify';
-              import { schemaResourceProperties, schemaTypeConfiguration } from './schema';
+              import { schemaResourceProperties, schemaTypeConfiguration } from './schema.js';
+              import { schemaResourceProperties as casedProperties, schemaTypeConfiguration as casedSchema } from './js-schema.js';
 
               export const TypeName = '${schemaJson.typeName}';
 
@@ -133,8 +134,8 @@ export const generate = (program: Program): Program =>
                 constructor() {
                     super({
                         typeName: TypeName,
-                        schema: schemaResourceProperties,
-                        typeConfigurationSchema: schemaTypeConfiguration,
+                        schema: schemaResourceProperties.additional(false),
+                        typeConfigurationSchema: schemaTypeConfiguration.additional(false),
                         ids: PrimaryIds,
                     });
                 }
@@ -142,24 +143,37 @@ export const generate = (program: Program): Program =>
 
               export const resourceBuilder = new ResourceBuilder();
 
-              export type RawProperties = ConditionalSimplifyDeep<
-                  TypeOf<typeof schemaResourceProperties>
-              >;
-              export type Properties = CamelCasedPropertiesDeep<RawProperties>;
-
-              export type RawTypeConfiguration = ConditionalSimplifyDeep<
-                  TypeOf<typeof schemaTypeConfiguration>
-              >;
-              export type TypeConfiguration = CamelCasedPropertiesDeep<RawTypeConfiguration>;
-
-              export * from './schema';
+              export * from './schema.js';
             `;
 
             await writeFile(join(outputDirectory, 'index.ts'), model);
 
-            const worker = dedent`
-                export * from '@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib/dist/logging/worker.js';
-            `;
-            await writeFile(join(outputDirectory, 'worker.ts'), worker);
+            const { convert: camelcasedConvert } = makeConverter(
+                reader,
+                writer,
+                {
+                    transform: (doc) => {
+                        for (const type of doc.types) {
+                            if (type.type === 'object') {
+                                type.properties = camelcaseKeys(
+                                    type.properties,
+                                    {
+                                        preserveConsecutiveUppercase: true,
+                                    }
+                                );
+                            }
+                        }
+                        return doc;
+                    },
+                }
+            );
+            const { data: camelcasedData } = await camelcasedConvert({
+                data: { definitions } as any,
+            });
+            await writeFile(
+                join(outputDirectory, 'js-schema.ts'),
+                camelcasedData,
+                'utf8'
+            );
         }
     );

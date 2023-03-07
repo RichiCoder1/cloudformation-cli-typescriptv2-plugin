@@ -1,17 +1,15 @@
 import { AwsCredentialIdentity } from '@aws-sdk/types';
 import { Context } from 'aws-lambda';
-import camelcaseKeys from 'camelcase-keys';
 import assert from 'node:assert';
 import { isNativeError } from 'node:util/types';
 import { Logger, stdSerializers } from 'pino';
+import { ensure, ObjectValidator, TypeOf, ValidationError } from 'suretype';
 import {
-    compile,
-    ensure,
-    ObjectValidator,
-    TypeOf,
-    ValidationError,
-} from 'suretype';
-import { CamelCasedPropertiesDeep, SetRequired } from 'type-fest';
+    CamelCasedPropertiesDeep,
+    PascalCasedPropertiesDeep,
+    SetRequired,
+} from 'type-fest';
+import camelcaseKeys from './utils/camelcaseKeys.js';
 import {
     Action,
     BaseRequest,
@@ -38,6 +36,41 @@ import { CfnResponse, HandlerErrorCode, OperationStatus } from './response.js';
 import { Input } from './types.js';
 
 const errorFormatter = stdSerializers.err;
+
+function toJs<In>(
+    input: In,
+    schema?: ObjectValidator<unknown>
+): CamelCasedPropertiesDeep<In> {
+    const result = camelcaseKeys(input, {
+        preserveConsecutiveUppercase: true,
+    }) as any;
+    if (process.env.NODE_ENV === 'dev') {
+        ensure(schema, result, {
+            ajvOptions: {
+                coerceTypes: true,
+            },
+        });
+    }
+    return result;
+}
+
+function fromJs<In>(
+    input: In,
+    schema?: ObjectValidator<unknown>
+): PascalCasedPropertiesDeep<In> {
+    const result = camelcaseKeys(input, {
+        preserveConsecutiveUppercase: true,
+        pascalCase: true,
+    }) as any;
+    if (process.env.NODE_ENV === 'dev') {
+        ensure(schema, result, {
+            ajvOptions: {
+                coerceTypes: true,
+            },
+        });
+    }
+    return result;
+}
 
 export interface ResourceHandlerProperties<
     TProperties extends ObjectValidator<unknown>,
@@ -169,35 +202,59 @@ export abstract class ResourceBuilderBase<
     }
 
     async #testEntrypoint(event: unknown): Promise<CfnResponse> {
-        const testData = ensure(TestRequestSchema, event);
-        return await this.#handleRequest({
-            action: testData.action,
-            resourceProperties: testData.request.desiredResourceState,
-            oldResourceProperties: testData.request.previousResourceState,
-            typeConfiguration: testData.request.typeConfiguration,
-            credentials: camelcaseKeys(testData.credentials),
-        });
+        try {
+            const testData = this.#ensure(TestRequestSchema, event);
+            const result = await this.#handleRequest({
+                action: testData.action,
+                resourceProperties: testData.request.desiredResourceState,
+                oldResourceProperties: testData.request.previousResourceState,
+                typeConfiguration: testData.request.typeConfiguration,
+                credentials: toJs(testData.credentials),
+            });
+
+            // In dev, validate the outgoing models to identify errors earlier
+            if ('ResourceModel' in result) {
+                this.#ensure(this.options.schema, result.ResourceModel);
+            }
+
+            if ('ResourceModels' in result) {
+                for (const model of result.ResourceModels) {
+                    this.#ensure(this.options.schema, model);
+                }
+            }
+            this.logger.info({ result }, 'Successfully got result.');
+            return result;
+        } catch (e) {
+            defaultLogger.error(e, 'Failed to parse request');
+            return this.#getErrorForException(e);
+        }
     }
 
     async #entrypoint(event: unknown, context: Context): Promise<CfnResponse> {
-        const baseRequest = ensureBaseRequest(event);
-        const [logger, metrics] = await getInstrumentation(
-            baseRequest,
-            context,
-            defaultLogger
-        );
-        this.#logger = logger;
-        const credentials = camelcaseKeys(
-            baseRequest.RequestData.CallerCredentials!
-        );
-        return await this.#handleRequest({
-            action: baseRequest.Action,
-            resourceProperties: baseRequest.RequestData.ResourceProperties!,
-            oldResourceProperties:
-                baseRequest.RequestData.PreviousResourceProperties,
-            typeConfiguration: baseRequest.RequestData.TypeConfiguration,
-            credentials,
-        });
+        try {
+            const baseRequest = ensureBaseRequest(event);
+            const [logger, metrics] = await getInstrumentation(
+                baseRequest,
+                context,
+                defaultLogger
+            );
+            this.#logger = logger;
+            this.#metrics = metrics;
+            const credentials = toJs(
+                baseRequest.RequestData.CallerCredentials!
+            );
+            return await this.#handleRequest({
+                action: baseRequest.Action,
+                resourceProperties: baseRequest.RequestData.ResourceProperties!,
+                oldResourceProperties:
+                    baseRequest.RequestData.PreviousResourceProperties,
+                typeConfiguration: baseRequest.RequestData.TypeConfiguration,
+                credentials,
+            });
+        } catch (e) {
+            defaultLogger.error(e, 'Failed to parse request');
+            return this.#getErrorForException(e);
+        }
     }
 
     async #handleRequest(event: GenericRequestEvent): Promise<CfnResponse> {
@@ -242,48 +299,33 @@ export abstract class ResourceBuilderBase<
         resourceProperties,
         typeConfiguration: rawTypeConfiguration,
     }: GenericRequestEvent): Promise<CfnResponse> {
-        const ensureProperties = compile(this.options.schema, {
-            ensure: true,
-        });
-        const ensureTypeConfiguration = compile(
-            this.options.typeConfigurationSchema,
-            {
-                ensure: true,
-            }
-        );
         assert(action === 'CREATE');
-        const properties = ensureProperties(resourceProperties);
-        const typeConfiguration = ensureTypeConfiguration(
+        const properties = this.#ensure(
+            this.options.schema,
+            resourceProperties
+        );
+        const typeConfiguration = this.#ensure(
+            this.options.typeConfigurationSchema,
             rawTypeConfiguration ?? {}
         );
         const createHandler = this.#handlers!.create.bind(this);
         const result = await createHandler({
             action,
-            properties: camelcaseKeys(properties, {
-                deep: true,
-            }) as any,
+            properties: toJs(properties) as any,
             logger: this.#logger,
-            typeConfiguration: camelcaseKeys(typeConfiguration, {
-                deep: true,
-            }) as any,
+            typeConfiguration: toJs(typeConfiguration) as any,
         });
         if (result.Status === OperationStatus.Success) {
             return {
                 Status: result.Status,
-                ResourceModel: camelcaseKeys(result.Properties, {
-                    deep: true,
-                    pascalCase: true,
-                }),
+                ResourceModel: fromJs(result.Properties),
             };
         } else {
             return {
                 Status: result.Status,
                 Message: result.Message,
                 ErrorCode: result.ErrorCode,
-                ResourceModel: camelcaseKeys(result.Properties, {
-                    deep: true,
-                    pascalCase: true,
-                }),
+                ResourceModel: fromJs(result.Properties),
                 CallbackContext: result.CallbackContext ?? {},
             };
         }
@@ -295,52 +337,38 @@ export abstract class ResourceBuilderBase<
         oldResourceProperties,
         typeConfiguration: rawTypeConfiguration,
     }: GenericRequestEvent): Promise<CfnResponse> {
-        const ensureProperties = compile(this.options.schema, {
-            ensure: true,
-        });
-        const ensureTypeConfiguration = compile(
-            this.options.typeConfigurationSchema,
-            {
-                ensure: true,
-            }
-        );
         assert(action === 'UPDATE');
-        const properties = ensureProperties(resourceProperties);
-        const oldProperties = ensureProperties(oldResourceProperties);
-        const typeConfiguration = ensureTypeConfiguration(
+        const properties = this.#ensure(
+            this.options.schema,
+            resourceProperties
+        );
+        const oldProperties = this.#ensure(
+            this.options.schema,
+            oldResourceProperties
+        );
+        const typeConfiguration = this.#ensure(
+            this.options.typeConfigurationSchema,
             rawTypeConfiguration ?? {}
         );
         const updateHandler = this.#handlers!.update.bind(this);
         const result = await updateHandler({
             action: action,
-            properties: camelcaseKeys(properties, {
-                deep: true,
-            }) as any,
-            previousProperties: camelcaseKeys(oldProperties, {
-                deep: true,
-            }) as any,
+            properties: toJs(properties) as any,
+            previousProperties: toJs(oldProperties) as any,
             logger: this.#logger,
-            typeConfiguration: camelcaseKeys(typeConfiguration, {
-                deep: true,
-            }) as any,
+            typeConfiguration: toJs(typeConfiguration) as any,
         });
         if (result.Status === OperationStatus.Success) {
             return {
                 Status: result.Status,
-                ResourceModel: camelcaseKeys(result.Properties, {
-                    deep: true,
-                    pascalCase: true,
-                }),
+                ResourceModel: fromJs(result.Properties),
             };
         } else {
             return {
                 Status: result.Status,
                 Message: result.Message,
                 ErrorCode: result.ErrorCode,
-                ResourceModel: camelcaseKeys(result.Properties, {
-                    deep: true,
-                    pascalCase: true,
-                }),
+                ResourceModel: fromJs(result.Properties),
                 CallbackContext: result.CallbackContext ?? {},
             };
         }
@@ -351,30 +379,21 @@ export abstract class ResourceBuilderBase<
         resourceProperties,
         typeConfiguration: rawTypeConfiguration,
     }: GenericRequestEvent): Promise<CfnResponse> {
-        const ensureProperties = compile(this.options.schema, {
-            ensure: true,
-        });
-        const ensureTypeConfiguration = compile(
-            this.options.typeConfigurationSchema,
-            {
-                ensure: true,
-            }
-        );
         assert(action === 'DELETE');
-        const properties = ensureProperties(resourceProperties);
-        const typeConfiguration = ensureTypeConfiguration(
+        const properties = this.#ensure(
+            this.options.schema,
+            resourceProperties
+        );
+        const typeConfiguration = this.#ensure(
+            this.options.typeConfigurationSchema,
             rawTypeConfiguration ?? {}
         );
         const deleteHandler = this.#handlers!.delete.bind(this);
         const result = await deleteHandler({
             action: action,
-            properties: camelcaseKeys(properties, {
-                deep: true,
-            }) as any,
+            properties: toJs(properties) as any,
             logger: this.#logger,
-            typeConfiguration: camelcaseKeys(typeConfiguration, {
-                deep: true,
-            }) as any,
+            typeConfiguration: toJs(typeConfiguration) as any,
         });
         if (result.Status === OperationStatus.Success) {
             return {
@@ -385,10 +404,7 @@ export abstract class ResourceBuilderBase<
                 Status: result.Status,
                 Message: result.Message,
                 ErrorCode: result.ErrorCode,
-                ResourceModel: camelcaseKeys(result.Properties, {
-                    deep: true,
-                    pascalCase: true,
-                }),
+                ResourceModel: fromJs(result.Properties),
                 CallbackContext: result.CallbackContext ?? {},
             };
         }
@@ -399,82 +415,62 @@ export abstract class ResourceBuilderBase<
         resourceProperties,
         typeConfiguration: rawTypeConfiguration,
     }: GenericRequestEvent): Promise<CfnResponse> {
-        const ensureProperties = compile(this.options.schema, {
-            ensure: true,
-        });
-        const ensureTypeConfiguration = compile(
-            this.options.typeConfigurationSchema,
-            {
-                ensure: true,
-            }
-        );
         assert(action === 'READ');
-        const properties = ensureProperties(resourceProperties);
-        const typeConfiguration = ensureTypeConfiguration(
+        const properties = this.#ensure(
+            this.options.schema,
+            resourceProperties
+        );
+        const typeConfiguration = this.#ensure(
+            this.options.typeConfigurationSchema,
             rawTypeConfiguration ?? {}
         );
         const readHandler = this.#handlers!.read.bind(this);
         const result = await readHandler({
             action: action,
-            properties: camelcaseKeys(properties, {
-                deep: true,
-            }) as any,
+            properties: toJs(properties) as any,
             logger: this.#logger,
-            typeConfiguration: camelcaseKeys(typeConfiguration, {
-                deep: true,
-            }) as any,
+            typeConfiguration: toJs(typeConfiguration) as any,
         });
         return {
             Status: result.Status,
-            ResourceModel: camelcaseKeys(result.Properties, {
-                deep: true,
-                pascalCase: true,
-            }),
+            ResourceModel: fromJs(result.Properties),
         };
     }
 
     async #handleList({
         action,
-        resourceProperties,
         typeConfiguration: rawTypeConfiguration,
     }: GenericRequestEvent): Promise<CfnResponse> {
-        const ensureProperties = compile(this.options.schema, {
-            ensure: true,
-        });
-        const ensureTypeConfiguration = compile(
-            this.options.typeConfigurationSchema,
-            {
-                ensure: true,
-            }
-        );
         assert(action === 'LIST');
-        const typeConfiguration = ensureTypeConfiguration(
+        const typeConfiguration = this.#ensure(
+            this.options.typeConfigurationSchema,
             rawTypeConfiguration ?? {}
         );
         const listHandler = this.#handlers!.list.bind(this);
         const result = await listHandler({
             action: action,
             logger: this.#logger,
-            typeConfiguration: camelcaseKeys(typeConfiguration, {
-                deep: true,
-            }) as any,
+            typeConfiguration: toJs(typeConfiguration) as any,
         });
         return {
             Status: result.Status,
-            ResourceModels: camelcaseKeys(result.ResourceModels, {
-                deep: true,
-                pascalCase: true,
-            }),
+            ResourceModels: fromJs(result.ResourceModels),
         };
+    }
+
+    #ensure<Schema extends ObjectValidator<unknown>>(
+        schema: Schema,
+        value: unknown
+    ) {
+        return ensure(schema, value, {
+            ajvOptions: {
+                coerceTypes: true,
+            },
+        });
     }
 
     #getErrorForException(e: unknown): CfnResponse {
         if (e !== null && (e instanceof Error || isNativeError(e))) {
-            this.#logger.warn(
-                e,
-                'There was an issue while handling the request'
-            );
-
             const serializedError = errorFormatter(e);
             const message: string = `${serializedError.type}: ${serializedError.message}\n${serializedError.stack}`;
             if (BaseHandlerError.isHandlerError(e)) {
@@ -484,7 +480,7 @@ export abstract class ResourceBuilderBase<
                     ErrorCode: e.code,
                 };
             }
-            if (serializedError.name === 'ValidationError') {
+            if (serializedError.type === 'ValidationError') {
                 const validationError = e as ValidationError;
                 return {
                     Status: OperationStatus.Failed as const,
@@ -600,7 +596,7 @@ export abstract class ResourceBuilderBase<
     /**
      * Indicates the a resource was successfully deleted
      */
-    public async deleted() {
+    public deleted() {
         return {
             Status: OperationStatus.Success,
         } as const;
@@ -610,7 +606,7 @@ export abstract class ResourceBuilderBase<
      * Returns the result of a read operation
      * @param properties The full properties of the resource, including the id(s).
      */
-    public async readResult(
+    public readResult(
         properties: CamelCasedPropertiesDeep<
             SetRequired<TProperties, TPrimaryKeys>
         >
@@ -621,14 +617,16 @@ export abstract class ResourceBuilderBase<
         } as const;
     }
 
-    public async listResult(
+    public listResult(
         properties: CamelCasedPropertiesDeep<
             SetRequired<TProperties, TPrimaryKeys>
-        >[]
-    ) {
+        >[],
+        nextToken: string | null
+    ): ListResult<TProperties, TPrimaryKeys> {
         return {
             Status: OperationStatus.Success,
-            Properties: properties,
+            ResourceModels: properties,
+            NextToken: nextToken,
         } as const;
     }
 }

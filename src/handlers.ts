@@ -7,6 +7,7 @@ import {
     SetRequired,
     Simplify,
     CamelCasedPropertiesDeep,
+    CamelCase,
 } from 'type-fest';
 import { Input } from './types.js';
 
@@ -133,7 +134,7 @@ export type ListResult<
 > = {
     readonly Status: OperationStatus.Success;
     readonly ResourceModels: CamelCasedPropertiesDeep<
-        Pick<TProperties, TPrimaryKeys>
+        SetRequired<TProperties, TPrimaryKeys>
     >[];
     readonly NextToken: string | null;
 };

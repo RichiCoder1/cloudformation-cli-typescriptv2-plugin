@@ -22,6 +22,9 @@
       "esm"
     ],
     "platform": "node",
+    "noExternals": [
+      "camelcase-keys"
+    ],
     "dts": true,
     "bundle": false,
     "clean": true
@@ -35,7 +38,7 @@
   },
   "engines": {
     "node": ">=18.0.0",
-    "npm": ">=9.0.0"
+    "npm": ">=8.0.0"
   },
   "repository": {
     "type": "git",

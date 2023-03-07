@@ -1,14 +1,19 @@
 {
+  "name": "test-type",
+  "version": "1.0.0",
   "description": "AWS custom resource provider named Test::Test::Test.",
   "private": true,
   "main": "dist/handlers.js",
+  "type": "module",
   "files": [
     "dist"
   ],
   "scripts": {
     "type-check": "npx tsc",
     "generate": "cfn-js generate --schema test-test-test.json",
-    "build": "sam build --build-dir build",
+    "prebuild": "tsup-node",
+    "invoke:test": "sam local invoke -t build/template.yaml TestEntrypoint",
+    "build": "sam build --build-dir build --use-container",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "devDependencies": {

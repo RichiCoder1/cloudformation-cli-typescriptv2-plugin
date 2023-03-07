@@ -1,8 +1,10 @@
+console.log('1');
 import { resourceBuilder } from './generated/index.js';
 
 const { entrypoint, testEntrypoint } = resourceBuilder
     .handle({
         async create(event) {
+            this.logger.info(event.properties);
             return this.created({
                 // ID (from primaryIdentifies) is required
                 // Will return a type error if not provided
@@ -36,16 +38,19 @@ const { entrypoint, testEntrypoint } = resourceBuilder
             });
         },
         async list(event) {
-            return this.listResult([
-                {
-                    // ID (from primaryIdentifies) is required
-                    // Will return a type error if not provided
-                    tPSCode: '123456679',
-                    // Standard required properties
-                    title: 'My Title',
-                    testCode: 'NOT_STARTED',
-                },
-            ]);
+            return this.listResult(
+                [
+                    {
+                        // ID (from primaryIdentifies) is required
+                        // Will return a type error if not provided
+                        tPSCode: '123456679',
+                        // Standard required properties
+                        title: 'My Title',
+                        testCode: 'NOT_STARTED',
+                    },
+                ],
+                null
+            );
         },
     })
     .build();

@@ -1,4 +1,5 @@
 {
+  "name": "{{ name }}",
   "description": "{{ description }}",
   "private": true,
   "main": "dist/handlers.js",
@@ -8,6 +9,8 @@
   "scripts": {
     "type-check": "npx tsc",
     "generate": "cfn-js generate --schema {{ schema }}",
+    "prebuild": "tsup-node",
+    "invoke:test": "sam local invoke -t build/template.yaml TestEntrypoint",
     "build": "sam build{% if use_docker %} --use-container{% endif %} --build-dir build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

@@ -3,21 +3,15 @@ Description: AWS SAM template for the Test::Test::Test resource type
 Resources:
   TestEntrypoint:
     Metadata: &id001
-      BuildMethod: esbuild
       BuildProperties:
-        EntryPoints:
-          - src/handlers.ts
-          - src/generated/worker.ts
-        External:
-          - "@aws-sdk/*"
-        Format: esm
-        Sourcemap: true
-        Target: es2022
         UseNpmCi: true
     Properties:
       CodeUri: ./
       Handler: dist/handlers.testEntrypoint
       Runtime: nodejs18.x
+      Environment:
+        Variables:
+          NODE_ENV: dev
     Type: AWS::Serverless::Function
   TypeFunction:
     Metadata: *id001

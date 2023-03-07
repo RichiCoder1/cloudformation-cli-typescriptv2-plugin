@@ -6,7 +6,7 @@ import { pinoLambdaDestination } from 'pino-lambda';
 import { BaseRequest } from '~/request.js';
 import { defaultRedaction, defaultLogger, withRequest } from './base.js';
 import { CloudWatchLogsStream } from './cloudwatch-stream.js';
-import camelcaseKeys from 'camelcase-keys';
+import camelcaseKeys from '../utils/camelcaseKeys.js';
 
 export async function getInstrumentation(
     request: BaseRequest,

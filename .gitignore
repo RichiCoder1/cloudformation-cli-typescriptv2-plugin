@@ -143,4 +143,5 @@ coverage/
 *.iml
 
 # Examples
+build.toml
 example/package-lock.json
