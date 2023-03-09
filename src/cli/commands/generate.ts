@@ -117,7 +117,11 @@ export const generate = (program: Program): Program =>
             definitions['TypeConfiguration'] = typeConfigurationSchema;
 
             const idPaths: string[] = resource['primaryIdentifier'];
+            const additionalIdPaths: string[] =
+                resource['additionalIdentifiers'] ?? [];
+            const allIds = new Set<string>();
             const requiredIds = new Set<string>();
+            const additionalIds = new Set<string>();
             for (const id of idPaths) {
                 const ptr = new JsonPointer(id);
                 const path = ptr.path;
@@ -137,11 +141,39 @@ export const generate = (program: Program): Program =>
                     );
                 }
                 requiredIds.add(path[1]);
+                allIds.add(path[1]);
+            }
+
+            for (const id of additionalIdPaths) {
+                const ptr = new JsonPointer(id);
+                const path = ptr.path;
+                if (ptr.path.length !== 2) {
+                    throw new Error(
+                        `Invalid additionalIdentifiers ${id}. The primaryIdentifier must be a direct property. Nested properties are not supported.`
+                    );
+                }
+                if (path[0] !== 'properties') {
+                    throw new Error(
+                        `Invalid additionalIdentifiers ${id}. The primaryIdentifier must come from properties.`
+                    );
+                }
+                if (typeof path[1] === 'number') {
+                    throw new Error(
+                        `Invalid additionalIdentifiers ${id}. The primaryIdentifier must be a fixed property name, not any array index.`
+                    );
+                }
+                additionalIds.add(path[1]);
+                allIds.add(path[1]);
             }
 
             const { data } = await convert({ data: { definitions } as any });
 
             await writeFile(join(outputDirectory, 'schema.ts'), data, 'utf8');
+
+            const reverseIdMap: Record<string, string> = {};
+            for (const id of allIds) {
+                reverseIdMap[jsifier(id)] = id;
+            }
 
             const model = dedent`
               /* tslint:disable */
@@ -161,15 +193,29 @@ export const generate = (program: Program): Program =>
               ] as const;
               export type PrimaryId = typeof PrimaryIds[number];
 
+              export const AdditionalIds = [
+                ${[...additionalIds]
+                    .map((id) => `'${jsifier(id)}'`)
+                    .join(',\n')}
+              ] as const;
+              export type AdditionalId = typeof AdditionalIds[number];
+
+              export const MapIds = ${JSON.stringify(
+                  reverseIdMap,
+                  null,
+                  2
+              )} as const;
+
               export type PropertiesSchema = typeof schemaResourceProperties;
               export type TypeConfigurationSchema = typeof schemaTypeConfiguration;
 
               export class ResourceBuilder extends ResourceBuilderBase<
-                PropertiesSchema,
-                TypeConfigurationSchema,
-                PrimaryId,
-                TransformedResourceProperties,
-                TransformedTypeConfiguration
+                  PropertiesSchema,
+                  TypeConfigurationSchema,
+                  PrimaryId,
+                  AdditionalId,
+                  TransformedResourceProperties,
+                  TransformedTypeConfiguration
               > {
                 constructor() {
                     super({
@@ -184,6 +230,21 @@ export const generate = (program: Program): Program =>
                         transformTypeConfiguration: {
                             toJS: Convert.toTransformedTypeConfiguration,
                             fromJS: Convert.transformedTypeConfigurationToJson,
+                        },
+                        transformIds: {
+                            fromJS: (ids: Record<PrimaryId, unknown>) => {
+                                const result: Record<typeof MapIds[keyof typeof MapIds], unknown> = {} as any;
+                                for (const [key, value] of Object.entries(ids)) {
+                                    const mapKey = MapIds[key as PrimaryId];
+                                    if (!mapKey) {
+                                        throw new Error(
+                                            \`Unknown id \${key}. Make sure you're only setting id properties on the result.\`
+                                        );
+                                    }
+                                    result[mapKey] = value;
+                                }
+                                return result;
+                            },
                         },
                     });
                 }

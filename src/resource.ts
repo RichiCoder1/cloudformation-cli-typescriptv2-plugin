@@ -36,6 +36,7 @@ export interface ResourceHandlerProperties<
     TProperties extends ObjectValidator<unknown>,
     TTypeConfiguration extends ObjectValidator<unknown> = BaseRequest['RequestData']['TypeConfiguration'],
     TPrimaryKeys extends keyof TTransformedProperties = never,
+    TAdditionalKeys extends keyof TTransformedProperties = never,
     TTransformedProperties extends Input = TypeOf<TProperties>,
     TTransformedTypeConfiguration extends Input = TypeOf<TTypeConfiguration>
 > {
@@ -43,13 +44,16 @@ export interface ResourceHandlerProperties<
     readonly schema: TProperties;
     readonly ids: readonly TPrimaryKeys[];
     readonly typeConfigurationSchema: TTypeConfiguration;
-    readonly transformProperties?: {
+    readonly transformProperties: {
         toJS: (properties: unknown) => TTransformedProperties;
         fromJS: (properties: unknown) => TypeOf<TProperties>;
     };
-    readonly transformTypeConfiguration?: {
+    readonly transformTypeConfiguration: {
         toJS: (properties: unknown) => TTransformedTypeConfiguration;
         fromJS: (properties: unknown) => TypeOf<TTypeConfiguration>;
+    };
+    readonly transformIds: {
+        fromJS: (ids: Record<TPrimaryKeys, unknown>) => Record<any, unknown>;
     };
 }
 
@@ -57,6 +61,7 @@ export interface ResourceHandlers<
     TPropertiesSchema extends ObjectValidator<unknown>,
     TTypeConfigurationSchema extends ObjectValidator<unknown>,
     TPrimaryKeys extends keyof TProperties,
+    TAdditionalKeys extends keyof TProperties = never,
     // These are defined to help simplify later types
     TProperties extends Input = TypeOf<TPropertiesSchema>,
     TTypeConfiguration extends Input = TypeOf<TTypeConfigurationSchema>,
@@ -64,6 +69,7 @@ export interface ResourceHandlers<
         TPropertiesSchema,
         TTypeConfigurationSchema,
         TPrimaryKeys,
+        TAdditionalKeys,
         TProperties,
         TTypeConfiguration
     >
@@ -100,8 +106,8 @@ export interface ResourceHandlers<
 
     readonly list: (
         this: THandler,
-        event: ListEvent<TProperties, TTypeConfiguration, TPrimaryKeys>
-    ) => Promise<ListResult<TProperties, TPrimaryKeys>>;
+        event: ListEvent<TTypeConfiguration>
+    ) => Promise<ListResult<TProperties, TPrimaryKeys, TAdditionalKeys>>;
 }
 
 // Handler agnostic event format
@@ -117,6 +123,7 @@ export abstract class ResourceBuilderBase<
     TPropertiesSchema extends ObjectValidator<unknown>,
     TTypeConfigurationSchema extends ObjectValidator<unknown>,
     TPrimaryKeys extends keyof TProperties,
+    TAdditionalKeys extends keyof TProperties,
     // These are defined to help simplify later types
     TProperties extends Input,
     TTypeConfiguration extends Input
@@ -125,6 +132,7 @@ export abstract class ResourceBuilderBase<
         TPropertiesSchema,
         TTypeConfigurationSchema,
         TPrimaryKeys,
+        TAdditionalKeys,
         TProperties,
         TTypeConfiguration
     > | null = null;
@@ -146,6 +154,7 @@ export abstract class ResourceBuilderBase<
             TPropertiesSchema,
             TTypeConfigurationSchema,
             TPrimaryKeys,
+            TAdditionalKeys,
             TProperties,
             TTypeConfiguration
         >
@@ -158,6 +167,7 @@ export abstract class ResourceBuilderBase<
             TPropertiesSchema,
             TTypeConfigurationSchema,
             TPrimaryKeys,
+            TAdditionalKeys,
             TProperties,
             TTypeConfiguration
         >
@@ -340,9 +350,8 @@ export abstract class ResourceBuilderBase<
                 oldProperties
             ) as any,
             logger: this.#logger,
-            typeConfiguration: this.options.transformTypeConfiguration.toJS(
-                typeConfiguration
-            ) as any,
+            typeConfiguration:
+                this.options.transformTypeConfiguration.toJS(typeConfiguration),
         });
         if (result.Status === OperationStatus.Success) {
             return {
@@ -385,9 +394,8 @@ export abstract class ResourceBuilderBase<
                 properties
             ) as any,
             logger: this.#logger,
-            typeConfiguration: this.options.transformTypeConfiguration.toJS(
-                typeConfiguration
-            ) as any,
+            typeConfiguration:
+                this.options.transformTypeConfiguration.toJS(typeConfiguration),
         });
         if (result.Status === OperationStatus.Success) {
             return {
@@ -423,13 +431,10 @@ export abstract class ResourceBuilderBase<
         const readHandler = this.#handlers!.read.bind(this);
         const result = await readHandler({
             action: action,
-            properties: this.options.transformProperties.toJS(
-                properties
-            ) as any,
+            properties: this.options.transformProperties.toJS(properties),
             logger: this.#logger,
-            typeConfiguration: this.options.transformTypeConfiguration.toJS(
-                typeConfiguration
-            ) as any,
+            typeConfiguration:
+                this.options.transformTypeConfiguration.toJS(typeConfiguration),
         });
         return {
             Status: result.Status,
@@ -440,6 +445,7 @@ export abstract class ResourceBuilderBase<
     }
 
     async #handleList({
+        resourceProperties,
         action,
         typeConfiguration: rawTypeConfiguration,
     }: GenericRequestEvent): Promise<CfnResponse> {
@@ -452,14 +458,14 @@ export abstract class ResourceBuilderBase<
         const result = await listHandler({
             action: action,
             logger: this.#logger,
-            typeConfiguration: this.options.transformTypeConfiguration.toJS(
-                typeConfiguration
-            ) as any,
+            properties: resourceProperties,
+            typeConfiguration:
+                this.options.transformTypeConfiguration.toJS(typeConfiguration),
         });
         return {
             Status: result.Status,
-            ResourceModels: result.ResourceModels.map((model) =>
-                this.options.transformProperties.fromJS(model)
+            ResourceModels: result.ResourceIds.map((model) =>
+                this.options.transformIds.fromJS(model)
             ),
         };
     }
@@ -616,12 +622,15 @@ export abstract class ResourceBuilderBase<
     }
 
     public listResult(
-        properties: SetRequired<TProperties, TPrimaryKeys>[],
+        properties: SetRequired<
+            Pick<TProperties, TPrimaryKeys | TAdditionalKeys>,
+            TPrimaryKeys
+        >[],
         nextToken: string | null
-    ): ListResult<TProperties, TPrimaryKeys> {
+    ): ListResult<TProperties, TPrimaryKeys, TAdditionalKeys> {
         return {
             Status: OperationStatus.Success,
-            ResourceModels: properties,
+            ResourceIds: properties,
             NextToken: nextToken,
         } as const;
     }

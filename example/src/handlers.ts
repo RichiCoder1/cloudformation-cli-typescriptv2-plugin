@@ -43,9 +43,6 @@ const { entrypoint, testEntrypoint } = resourceBuilder
                         // ID (from primaryIdentifies) is required
                         // Will return a type error if not provided
                         tpsCode: '123456679',
-                        // Standard required properties
-                        title: 'My Title',
-                        testCode: 'NOT_STARTED',
                     },
                 ],
                 null

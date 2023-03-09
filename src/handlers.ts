@@ -1,7 +1,7 @@
 import { Action } from './request.js';
 import { OperationStatus } from './response.js';
 import { Logger } from 'pino';
-import { SetRequired, Simplify } from 'type-fest';
+import { Except, SetRequired, Simplify } from 'type-fest';
 import { Input } from './types.js';
 
 // I apologize to anyone who has to read this code.
@@ -68,14 +68,12 @@ export type ReadEvent<
     readonly properties: Simplify<Pick<TProperties, TPrimaryKeys>>;
 };
 
-export type ListEvent<
-    TProperties extends Input,
-    TTypeConfiguration extends Input,
-    TPrimaryKeys extends keyof TProperties
-> = BaseEvent<TTypeConfiguration> & {
-    readonly action: 'LIST';
-    // List can apparently be filters w/ properties, but it's not clear what that means?
-};
+export type ListEvent<TTypeConfiguration extends Input> =
+    BaseEvent<TTypeConfiguration> & {
+        readonly action: 'LIST';
+        // List can apparently be filters w/ properties, but it's not clear what that means?
+        readonly properties: unknown;
+    };
 
 export type SuccessWithPropertiesResult<
     TProperties extends Input,
@@ -111,9 +109,13 @@ export type DeleteResult<
 
 export type ListResult<
     TProperties extends Input,
-    TPrimaryKeys extends keyof TProperties
+    TPrimaryKeys extends keyof TProperties,
+    TAdditionalKeys extends keyof TProperties
 > = {
     readonly Status: OperationStatus.Success;
-    readonly ResourceModels: SetRequired<TProperties, TPrimaryKeys>[];
+    readonly ResourceIds: SetRequired<
+        Pick<TProperties, TPrimaryKeys | TAdditionalKeys>,
+        TPrimaryKeys
+    >[];
     readonly NextToken: string | null;
 };
