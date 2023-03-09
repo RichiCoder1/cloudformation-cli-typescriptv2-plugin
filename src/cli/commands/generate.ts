@@ -232,10 +232,10 @@ export const generate = (program: Program): Program =>
                             fromJS: Convert.transformedTypeConfigurationToJson,
                         },
                         transformIds: {
-                            fromJS: (ids: Record<PrimaryId, unknown>) => {
+                            fromJS: (ids: Record<PrimaryId | AdditionalId, unknown>) => {
                                 const result: Record<typeof MapIds[keyof typeof MapIds], unknown> = {} as any;
                                 for (const [key, value] of Object.entries(ids)) {
-                                    const mapKey = MapIds[key as PrimaryId];
+                                    const mapKey = MapIds[key as PrimaryId | AdditionalId];
                                     if (!mapKey) {
                                         throw new Error(
                                             \`Unknown id \${key}. Make sure you're only setting id properties on the result.\`
