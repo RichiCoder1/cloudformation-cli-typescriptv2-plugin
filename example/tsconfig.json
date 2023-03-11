@@ -7,7 +7,20 @@
     "alwaysStrict": true,
     "esModuleInterop": true,
     "allowJs": true,
-    "noEmit": true
+    "noEmit": true,
+    "baseUrl": ".",
+    "rootDirs": [
+      ".",
+      ".cfn/typescript/generated"
+    ],
+    "paths": {
+      "@/*": [
+        "src/*",
+      ],
+      "$cfn/*": [
+        ".cfn/typescript/generated/*"
+      ]
+    }
   },
   "include": [
     "src/**/*.ts"

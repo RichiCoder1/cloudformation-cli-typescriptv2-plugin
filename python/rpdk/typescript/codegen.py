@@ -118,12 +118,11 @@ class TypescriptLanguagePlugin(LanguagePlugin):
         handler_package_path = self.package_root
         LOG.debug("Making folder '%s'", handler_package_path)
         handler_package_path.mkdir(parents=True, exist_ok=True)
-        _render_template(
-            handler_package_path / "handlers.ts",
-            lib_name=SUPPORT_LIB_NAME,
-            type_name=project.type_name,
+
+        src_folder = project.root / "src"
+        _copy_resource(
+            src_folder / "handlers.ts",
         )
-        # models.ts produced by generate
 
         # project support files
         _copy_resource(project.root / ".gitignore", "typescript.gitignore")

@@ -11,7 +11,7 @@
   "scripts": {
     "type-check": "npx tsc",
     "generate": "cfn-js generate --schema test-test-test.json",
-    "prebuild": "tsup-node",
+    "prebuild": "tsup",
     "invoke:test": "sam local invoke -t build/template.yaml TestEntrypoint",
     "build": "sam build --build-dir build --use-container",
     "test": "echo \"Error: no test specified\" && exit 1"

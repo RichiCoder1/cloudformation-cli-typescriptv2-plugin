@@ -9,7 +9,7 @@
   "scripts": {
     "type-check": "npx tsc",
     "generate": "cfn-js generate --schema {{ schema }}",
-    "prebuild": "tsup-node",
+    "prebuild": "tsup",
     "invoke:test": "sam local invoke -t build/template.yaml TestEntrypoint",
     "build": "sam build{% if use_docker %} --use-container{% endif %} --build-dir build",
     "test": "echo \"Error: no test specified\" && exit 1"

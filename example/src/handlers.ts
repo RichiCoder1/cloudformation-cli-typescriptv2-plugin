@@ -1,4 +1,4 @@
-import { resourceBuilder } from './generated/index.js';
+import { resourceBuilder } from '$cfn/index.js';
 
 const { entrypoint, testEntrypoint } = resourceBuilder
     .handle({

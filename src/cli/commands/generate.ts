@@ -44,16 +44,15 @@ export const generate = (program: Program): Program =>
                     type: 'string',
                     description: 'The path to the resource schema.',
                 })
-                .options('src', {
+                .options('root', {
                     type: 'string',
-                    description: 'The source directory for the resource.',
-                    default: './src',
+                    description: 'The root directory for the resource.',
+                    default: './',
                 })
                 .option('out', {
                     type: 'string',
-                    description:
-                        'The output directory for generated code within the source directory.',
-                    default: 'generated',
+                    description: 'The output directory for generated code.',
+                    default: '.cfn/typescript/generated',
                 }),
         async (argv) => {
             const { makeConverter, getJsonSchemaReader, getSureTypeWriter } =
@@ -68,14 +67,14 @@ export const generate = (program: Program): Program =>
             const { v, extractSingleJsonSchema } = await import('suretype');
             const { JsonPointer } = await import('json-ptr');
 
-            const { schema, src, out } = argv;
+            const { schema, root, out } = argv;
 
             if (!(await exists(schema))) {
                 console.error(`Schema file ${schema} does not exist.`);
                 throw new Error(`Schema file ${schema} does not exist.`);
             }
 
-            const outputDirectory = join(src, out);
+            const outputDirectory = join(root, out);
             try {
                 await mkdirp(outputDirectory);
             } catch (e) {

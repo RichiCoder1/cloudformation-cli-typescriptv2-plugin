@@ -1,12 +1,13 @@
-import { resourceBuilder } from './generated/index.js';
+import { resourceBuilder } from '$cfn/index.js';
 
 const { entrypoint, testEntrypoint } = resourceBuilder
     .handle({
         async create(event) {
+            this.logger.info(event.properties);
             return this.created({
                 // ID (from primaryIdentifies) is required
                 // Will return a type error if not provided
-                tPSCode: '123456679',
+                tpsCode: '123456679',
                 // Standard required properties
                 title: 'My Title',
                 testCode: 'NOT_STARTED',
@@ -16,7 +17,7 @@ const { entrypoint, testEntrypoint } = resourceBuilder
             return this.updated({
                 // ID (from primaryIdentifies) is required
                 // Will return a type error if not provided
-                tPSCode: '123456679',
+                tpsCode: '123456679',
                 // Standard required properties
                 title: 'My Title',
                 testCode: 'NOT_STARTED',
@@ -29,23 +30,23 @@ const { entrypoint, testEntrypoint } = resourceBuilder
             return this.readResult({
                 // ID (from primaryIdentifies) is required
                 // Will return a type error if not provided
-                tPSCode: '123456679',
+                tpsCode: '123456679',
                 // Standard required properties
                 title: 'My Title',
                 testCode: 'NOT_STARTED',
             });
         },
         async list(event) {
-            return this.listResult([
-                {
-                    // ID (from primaryIdentifies) is required
-                    // Will return a type error if not provided
-                    tPSCode: '123456679',
-                    // Standard required properties
-                    title: 'My Title',
-                    testCode: 'NOT_STARTED',
-                },
-            ]);
+            return this.listResult(
+                [
+                    {
+                        // ID (from primaryIdentifies) is required
+                        // Will return a type error if not provided
+                        tpsCode: '123456679',
+                    },
+                ],
+                null
+            );
         },
     })
     .build();
