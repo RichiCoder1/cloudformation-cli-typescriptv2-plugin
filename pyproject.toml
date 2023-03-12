@@ -4,7 +4,6 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cloudformation-cli-typescriptv2-plugin"
-version = "0.1.0a0"
 authors = [
   { name="Richard Simpson", email="richicopder1@outlook.com" },
 ]
@@ -25,6 +24,7 @@ classifiers = [
 dependencies = [
   "cloudformation-cli>=0.2.0"
 ]
+dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [
@@ -47,6 +47,9 @@ typescriptv2 = "rpdk.typescript.parser:setup_subparser"
 [tool.setuptools]
 include-package-data = true
 
+[tool.setuptools.dynamic]
+version = {attr = "rpdk.typescript.__version__"}
+
 [tool.setuptools.package-dir]
 "python.rpdk.typescript" = "rpdk.typescript"
 
@@ -54,6 +57,7 @@ include-package-data = true
 where = ["python"]
 
 [tool.setuptools.package-data]
+"rpdk.typescript" = ["*.json"]
 "rpdk.typescript.data" = ["*"]
 "rpdk.typescript.templates" = ["*"]
 

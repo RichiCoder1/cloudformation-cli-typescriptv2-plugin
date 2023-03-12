@@ -14,6 +14,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version-file: .node-version
+      - name: Install dependencies
+        run: |
+          npm ci
+      - name: Sync Versions
+        run: |
+          npm run sync-versions
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
@@ -22,6 +33,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install . .[dev]
+
       - name: Lint
         run: |
           python -m ruff .
@@ -34,19 +46,16 @@ jobs:
   build-node:
     name: Node ${{ matrix.node-version }}
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ["16", "18"]
-
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Node ${{ matrix.node-version }}
+      - name: Set up Node
         uses: actions/setup-node@v3
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version-file: .node-version
       - name: Install dependencies
         run: |
           npm ci
+
       - name: Build
         run: |
           npm run build
