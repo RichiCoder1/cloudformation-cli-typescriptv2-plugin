@@ -6,7 +6,6 @@ import { Logger, stdSerializers } from 'pino';
 import { ensure, ObjectValidator, TypeOf, ValidationError } from 'suretype';
 import { SetRequired } from 'type-fest';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
-import { setTimeout } from 'node:timers/promises';
 import {
     Action,
     BaseRequest,
@@ -14,7 +13,7 @@ import {
     RequestAwsCredentials,
     TestRequestSchema,
 } from './request.js';
-import { AlreadyExistsError, BaseHandlerError } from './exceptions.js';
+import { AlreadyExistsError, BaseHandlerError } from './errors.js';
 import {
     CreateEvent,
     DeleteEvent,
