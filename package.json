@@ -12,7 +12,9 @@
   "scripts": {
     "prepublishOnly": "tsup",
     "build": "tsup",
-    "sync-package": "tsx scripts/sync-package.mts"
+    "changeset": "changeset",
+    "sync-versions": "tsx scripts/sync-versions.mts",
+    "release": "changeset publish"
   },
   "bin": {
     "cfn-js": "./bin/cfn-js.js"
@@ -55,6 +57,7 @@
   },
   "homepage": "https://github.com/richicoder1/cloudformation-cli-typescriptv2-plugin#readme",
   "devDependencies": {
+    "@changesets/cli": "^2.26.0",
     "@tsconfig/node18": "^1.0.1",
     "@types/aws-lambda": "^8.10.111",
     "@types/fs-extra": "^11.0.1",
