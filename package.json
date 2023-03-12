@@ -1,6 +1,6 @@
 {
-  "name": "@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib",
-  "version": "2.0.0-a0",
+  "name": "@richicoder/cloudformation-cli-typescriptv2-lib",
+  "version": "0.1.0-a0",
   "description": "The CloudFormation Resource Provider Development Kit (RPDK) allows you to author your own resource providers that can be used by CloudFormation. This plugin library helps to provide runtime bindings for the execution of your providers by CloudFormation.",
   "private": false,
   "type": "module",

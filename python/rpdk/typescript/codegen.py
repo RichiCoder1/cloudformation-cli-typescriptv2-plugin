@@ -18,10 +18,8 @@ from .utils import run_tool_cmd
 LOG = logging.getLogger(__name__)
 
 EXECUTABLE = "cfn"
-SUPPORT_LIB_NAME = (
-    "@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib"
-)
-SUPPORT_LIB_VERSION = "^2.0.0-a0"
+SUPPORT_LIB_NAME = "@richicoder/cloudformation-cli-typescriptv2-lib"
+SUPPORT_LIB_VERSION = "^0.1.0-a0"
 MAIN_HANDLER_FUNCTION = "TypeFunction"
 
 
