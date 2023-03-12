@@ -1,14 +1,17 @@
-import { AwsCredentialIdentity } from '@aws-sdk/types';
-import { Context } from 'aws-lambda';
+import type { AwsCredentialIdentity } from '@aws-sdk/types';
+import type { Context } from 'aws-lambda';
 import assert from 'node:assert';
 import { isNativeError } from 'node:util/types';
 import { Logger, stdSerializers } from 'pino';
 import { ensure, ObjectValidator, TypeOf, ValidationError } from 'suretype';
 import { SetRequired } from 'type-fest';
+import { defaultProvider } from '@aws-sdk/credential-provider-node';
+import { setTimeout } from 'node:timers/promises';
 import {
     Action,
     BaseRequest,
     ensureBaseRequest,
+    RequestAwsCredentials,
     TestRequestSchema,
 } from './request.js';
 import { AlreadyExistsError, BaseHandlerError } from './exceptions.js';
@@ -141,11 +144,11 @@ export abstract class ResourceBuilderBase<
     typeName: string;
 
     get logger() {
-        return this.#logger;
+        return this.#logger ?? defaultLogger;
     }
 
     get metrics() {
-        return this.#metrics!;
+        return this.#metrics;
     }
 
     constructor(
@@ -194,9 +197,44 @@ export abstract class ResourceBuilderBase<
         };
     }
 
-    async #testEntrypoint(event: unknown): Promise<CfnResponse> {
+    async #testEntrypoint(event: any, context: Context): Promise<CfnResponse> {
+        const startTime = performance.now();
         try {
             const testData = this.#ensure(TestRequestSchema, event);
+            let credentials: RequestAwsCredentials | null = null;
+            if (testData.logGroupName) {
+                const provider = defaultProvider();
+                const creds = await provider({});
+                credentials = {
+                    AccessKeyId: creds.accessKeyId,
+                    SecretAccessKey: creds.secretAccessKey,
+                    SessionToken: creds.sessionToken,
+                };
+            }
+
+            const [logger, metrics, queues] = await getInstrumentation(
+                {
+                    Action: testData.action,
+                    ResourceType: this.typeName,
+                    ResourceTypeVersion: '0.1.0.dev1',
+                    LogicalResourceId:
+                        testData.request.logicalResourceIdentifier,
+                    Region: testData.region,
+                    StackId: 'TestStack',
+                    ProviderCredentials: credentials,
+                    ProviderLogGroupName: testData.logGroupName,
+                },
+                context,
+                defaultLogger
+            );
+            this.#logger = logger;
+            this.#metrics = metrics;
+
+            await this.#metrics.publishInvocationMetric(
+                new Date(),
+                testData.action
+            );
+
             const result = await this.#handleRequest({
                 action: testData.action,
                 resourceProperties: testData.request.desiredResourceState,
@@ -210,30 +248,57 @@ export abstract class ResourceBuilderBase<
                 this.#ensure(this.options.schema, result.ResourceModel);
             }
             this.logger.info({ result }, 'Successfully got result.');
+
+            await this.#metrics.publishDurationMetric(
+                new Date(),
+                testData.action,
+                performance.now() - startTime
+            );
+            await Promise.all(queues.map((p) => p?.onIdle()));
             return result;
         } catch (e) {
-            defaultLogger.error(e, 'Failed to parse request');
+            this.logger.error(e, 'Failed to parse request');
+            this.metrics.publishExceptionMetric(new Date(), event?.action, e);
             return this.#getErrorForException(e);
         }
     }
 
-    async #entrypoint(event: unknown, context: Context): Promise<CfnResponse> {
+    async #entrypoint(event: any, context: Context): Promise<CfnResponse> {
+        const startTime = performance.now();
         try {
             const baseRequest = ensureBaseRequest(event);
-            const [logger, metrics] = await getInstrumentation(
-                baseRequest,
+            const [logger, metrics, queues] = await getInstrumentation(
+                {
+                    Action: baseRequest.Action,
+                    ResourceType: baseRequest.ResourceType,
+                    ResourceTypeVersion: baseRequest.ResourceTypeVersion,
+                    LogicalResourceId:
+                        baseRequest.RequestData.LogicalResourceId,
+                    Region: baseRequest.Region,
+                    StackId: baseRequest.StackID,
+                    ProviderCredentials:
+                        baseRequest.RequestData.ProviderCredentials,
+                    ProviderLogGroupName:
+                        baseRequest.RequestData.ProviderLogGroupName,
+                },
                 context,
                 defaultLogger
             );
             this.#logger = logger;
             this.#metrics = metrics;
+
+            await this.#metrics.publishInvocationMetric(
+                new Date(),
+                baseRequest.Action
+            );
+
             const callerCredentials = baseRequest.RequestData.CallerCredentials;
             const credentials = {
                 accessKeyId: callerCredentials?.AccessKeyId,
                 secretAccessKey: callerCredentials?.SecretAccessKey,
                 sessionToken: callerCredentials?.SessionToken,
             } satisfies AwsCredentialIdentity;
-            return await this.#handleRequest({
+            const result = await this.#handleRequest({
                 action: baseRequest.Action,
                 resourceProperties: baseRequest.RequestData.ResourceProperties!,
                 oldResourceProperties:
@@ -241,8 +306,17 @@ export abstract class ResourceBuilderBase<
                 typeConfiguration: baseRequest.RequestData.TypeConfiguration,
                 credentials,
             });
+
+            await this.#metrics.publishDurationMetric(
+                new Date(),
+                baseRequest.Action,
+                performance.now() - startTime
+            );
+            await Promise.all(queues.map((p) => p?.onIdle()));
+            return result;
         } catch (e) {
             defaultLogger.error(e, 'Failed to parse request');
+            this.metrics.publishExceptionMetric(new Date(), event?.Action, e);
             return this.#getErrorForException(e);
         }
     }
@@ -283,6 +357,7 @@ export abstract class ResourceBuilderBase<
                 e,
                 'Resource handler failed to process request'
             );
+            this.metrics.publishExceptionMetric(new Date(), event.action, e);
             return this.#getErrorForException(e);
         }
     }

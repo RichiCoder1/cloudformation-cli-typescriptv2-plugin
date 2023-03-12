@@ -13,7 +13,7 @@
     "generate": "cfn-js generate --schema test-test-test.json",
     "prebuild": "tsup",
     "invoke:test": "sam local invoke -t build/template.yaml TestEntrypoint",
-    "build": "sam build --build-dir build --use-container",
+    "build": "sam build --build-dir build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "devDependencies": {

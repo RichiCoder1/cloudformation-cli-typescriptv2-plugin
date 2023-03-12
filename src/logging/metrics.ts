@@ -1,17 +1,15 @@
 import { AwsCredentialIdentity } from '@aws-sdk/types';
 import {
+    CloudWatch,
     Dimension,
     PutMetricDataInput,
     StandardUnit,
 } from '@aws-sdk/client-cloudwatch';
 import { Logger } from 'pino';
-import Pool from 'tinypool';
-import type { publishMetric } from './worker.js';
 import { Action } from '~/request.js';
 import { isNativeError } from 'node:util/types';
-import { getPool } from './pool.js';
-
-type PublishMetricArgs = Parameters<typeof publishMetric>;
+import pQueue from 'p-queue';
+import pRetry from 'p-retry';
 
 export enum MetricTypes {
     HandlerException = 'HandlerException',
@@ -38,17 +36,21 @@ export function formatDimensions(
 }
 
 export class MetricsPublisher {
+    public readonly queue: pQueue | undefined;
+
     private resourceNamespace: string;
-    private readonly pool: Pool | undefined;
+    private client: CloudWatch | null = null;
 
     constructor(
         private readonly logger: Logger,
         readonly credentials: AwsCredentialIdentity | null,
-        private readonly resourceType: string
+        private readonly resourceType: string,
+        prefix: string
     ) {
-        this.resourceNamespace = resourceType.replace(/::/g, '/');
+        this.resourceNamespace = `${prefix}`;
         if (credentials?.accessKeyId) {
-            this.pool = getPool(credentials);
+            this.client = new CloudWatch({ credentials });
+            this.queue = new pQueue();
         }
     }
 
@@ -59,26 +61,35 @@ export class MetricsPublisher {
         value: number,
         timestamp: Date
     ): Promise<void> {
-        if (!this.pool) {
+        if (!this.client) {
             return Promise.resolve();
         }
         try {
-            const metric = await this.pool.run(
-                {
-                    Namespace: `${METRIC_NAMESPACE_ROOT}/${this.resourceNamespace}`,
-                    MetricData: [
-                        {
-                            MetricName: metricName,
-                            Dimensions: formatDimensions(dimensions),
-                            Unit: unit,
-                            Timestamp: timestamp,
-                            Value: value,
+            this.logger.debug({ metricName }, 'Publishing metric.');
+            const timeout = AbortSignal.timeout(5000);
+            await this.queue.add(
+                async () => {
+                    return pRetry(
+                        () => {
+                            return this.client.putMetricData({
+                                Namespace: `${METRIC_NAMESPACE_ROOT}/${this.resourceNamespace}`,
+                                MetricData: [
+                                    {
+                                        MetricName: metricName,
+                                        Dimensions:
+                                            formatDimensions(dimensions),
+                                        Unit: unit,
+                                        Timestamp: timestamp,
+                                        Value: value,
+                                    },
+                                ],
+                            });
                         },
-                    ],
-                } satisfies PublishMetricArgs[0],
-                { name: 'publishMetric' }
+                        { retries: 3, signal: timeout }
+                    );
+                },
+                { signal: timeout }
             );
-            this.logger.debug('Response from "putMetricData"', metric);
         } catch (err) {
             this.logger.error(
                 err,

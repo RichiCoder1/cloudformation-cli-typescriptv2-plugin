@@ -1,19 +1,15 @@
 import { AwsCredentialIdentity } from '@aws-sdk/types';
-import { ResourceNotFoundException } from '@aws-sdk/client-cloudwatch';
 import {
-    CloudWatchLogsClient,
-    CreateLogGroupCommand,
+    CloudWatchLogs,
     paginateDescribeLogStreams,
-    CreateLogStreamCommand,
+    ResourceNotFoundException,
+    ResourceAlreadyExistsException,
 } from '@aws-sdk/client-cloudwatch-logs';
 import { Writable } from 'node:stream';
 import { type Logger } from 'pino';
-import Pool from 'tinypool';
-import type { publishLogMessage } from './worker.js';
+import pQueue from 'p-queue';
+import pRetry from 'p-retry';
 import { MetricsPublisher } from './metrics.js';
-import { getPool } from './pool.js';
-
-type PublishLogMessageArgs = Parameters<typeof publishLogMessage>;
 
 export interface CloudWatchLogsStreamOptions {
     logGroupName: string;
@@ -24,18 +20,19 @@ export interface CloudWatchLogsStreamOptions {
 }
 
 export class CloudWatchLogsStream extends Writable {
+    public readonly queue: pQueue;
+
     private readonly logGroupName: string;
     private readonly logStreamName: string;
-    private readonly client: CloudWatchLogsClient;
+    private readonly client: CloudWatchLogs;
     private readonly log: Logger;
     private readonly metrics: MetricsPublisher;
-    private readonly pool: Pool;
 
     constructor(options: CloudWatchLogsStreamOptions) {
-        super({ objectMode: false });
+        super({ objectMode: false, defaultEncoding: 'utf-8' });
         this.logGroupName = options.logGroupName;
         this.logStreamName = options.logStreamName;
-        this.client = new CloudWatchLogsClient({
+        this.client = new CloudWatchLogs({
             credentials: options.credentials,
         });
         this.log = options.log.child({
@@ -43,7 +40,7 @@ export class CloudWatchLogsStream extends Writable {
             logGroupName: this.logGroupName,
             logStreamName: this.logStreamName,
         });
-        this.pool = getPool(options.credentials);
+        this.queue = new pQueue({});
     }
 
     async ensureLogGroup() {
@@ -61,25 +58,25 @@ export class CloudWatchLogsStream extends Writable {
             );
 
             for await (const page of paginator) {
-                if (page.logStreams?.length ?? 0 === 0) {
+                if ((page.logStreams?.length ?? 0) === 0) {
                     continue;
                 }
                 for (const stream of page.logStreams) {
                     if (stream.logStreamName === this.logStreamName) {
-                        this.log.info('Found existing log stream');
+                        this.log.debug('Found existing log stream');
                         return;
                     }
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
             if (error instanceof ResourceNotFoundException) {
-                this.log.info(error, 'No log group found, creating one');
-                await this.client.send(
-                    new CreateLogGroupCommand({
-                        logGroupName: this.logGroupName,
-                    })
-                );
+                this.log.debug('No log group found, creating one');
+                await this.client.createLogGroup({
+                    logGroupName: this.logGroupName,
+                });
+                this.log.debug(`Created log group.`);
             } else {
+                this.log.error(error, 'Failed to check for log group.');
                 throw error;
             }
         }
@@ -87,13 +84,19 @@ export class CloudWatchLogsStream extends Writable {
     }
 
     private async createLogStream() {
-        this.log.info('Creating log stream');
-        await this.client.send(
-            new CreateLogStreamCommand({
+        try {
+            this.log.debug('Creating log stream');
+            await this.client.createLogStream({
                 logGroupName: this.logGroupName,
                 logStreamName: this.logStreamName,
-            })
-        );
+            });
+        } catch (error) {
+            if (error instanceof ResourceAlreadyExistsException) {
+                this.log.debug('Log stream already exists.');
+            } else {
+                throw error;
+            }
+        }
     }
 
     _write(
@@ -102,31 +105,57 @@ export class CloudWatchLogsStream extends Writable {
         callback: (error?: Error) => void
     ): void {
         if (encoding === 'binary') {
-            callback(new Error('Binary encoding not supported'));
+            const error = new Error('Binary encoding not supported');
+            this.metrics.publishLogDeliveryExceptionMetric(new Date(), error);
+            callback(error);
             return;
         }
 
-        if (typeof chunk !== 'string') {
-            callback(new Error('Only strings are supported'));
+        let message: string;
+        try {
+            message = chunk.toString();
+        } catch (error) {
+            this.log.error(error, `Failed to stringify chunk`);
+            this.log.error(
+                { chunk, encoding },
+                `Got chunk type: ${typeof chunk}`
+            );
+            this.metrics.publishLogDeliveryExceptionMetric(
+                new Date(),
+                error as Error
+            );
+            callback(error as Error);
             return;
         }
+
         const timestamp = Math.round(Date.now());
         const record = {
-            message: chunk,
+            message,
             timestamp,
         };
-        this.pool
-            .run(
-                {
-                    logEvents: [record],
-                    logGroupName: this.logGroupName,
-                    logStreamName: this.logStreamName,
-                } satisfies PublishLogMessageArgs[0],
-                { name: 'publishLogMessage' }
+        const timeout = AbortSignal.timeout(5000);
+        this.queue
+            .add(
+                async () => {
+                    return await pRetry(
+                        () => {
+                            return this.client.putLogEvents({
+                                logEvents: [record],
+                                logGroupName: this.logGroupName,
+                                logStreamName: this.logStreamName,
+                            });
+                        },
+                        { retries: 3, signal: timeout }
+                    );
+                },
+                { signal: timeout }
             )
             .then(() => callback())
             .catch((error) => {
                 this.log.error(error, 'Error publishing log message');
+                this.metrics
+                    .publishLogDeliveryExceptionMetric(new Date(), error)
+                    .then(() => callback(error));
             });
     }
 }

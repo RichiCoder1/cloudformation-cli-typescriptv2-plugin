@@ -32,7 +32,9 @@ function publish() {
     return activePublish;
   }
   activePublish = $`npm publish --registry ${registryUrl}`;
-  return activePublish;
+  return activePublish.finally(() => {
+    activePublish = null;
+  });
 }
 
 await publish();

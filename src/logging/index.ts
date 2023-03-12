@@ -3,52 +3,75 @@ import { MetricsPublisher } from './metrics.js';
 import { AwsCredentialIdentity } from '@aws-sdk/types';
 import { Logger, multistream, pino } from 'pino';
 import { pinoLambdaDestination } from 'pino-lambda';
-import { BaseRequest } from '~/request.js';
+import pQueue from 'p-queue';
+import { RequestAwsCredentials, Action } from '~/request.js';
 import { defaultRedaction, defaultLogger, withRequest } from './base.js';
 import { CloudWatchLogsStream } from './cloudwatch-stream.js';
 
+export interface InstrumentationProps {
+    readonly Action: Action;
+    readonly ResourceType: string;
+    readonly ResourceTypeVersion: string | null;
+    readonly LogicalResourceId: string | null;
+    readonly Region: string | null;
+    readonly StackId: string | null;
+    readonly ProviderCredentials?: RequestAwsCredentials;
+    readonly ProviderLogGroupName?: string;
+}
+
 export async function getInstrumentation(
-    request: BaseRequest,
+    props: InstrumentationProps,
     context: Context,
     log: Logger
-): Promise<[Logger, MetricsPublisher]> {
-    withRequest(request, context);
+): Promise<[Logger, MetricsPublisher, [pQueue | null, pQueue | null]]> {
+    const { ProviderCredentials, ...event } = props;
+    withRequest(props, context);
 
     const lambdaDestination = pinoLambdaDestination();
-    const resourceType = request.ResourceType;
-    const version = request.ResourceTypeVersion;
+    const resourceType = event.ResourceType;
+    const version = event.ResourceTypeVersion;
 
     const childContext = {
         cloudformation: {
-            action: request.Action,
+            action: event.Action,
             resourceType: resourceType,
             version,
             // Should we log account id?
-            region: request.Region,
-            stackId: request.StackId,
+            region: event.Region,
+            stackId: event.StackId,
+            logicalResourceId: event.LogicalResourceId,
         },
     };
 
-    let providerCredentials = request.RequestData?.ProviderCredentials;
+    const telemetryPrefix = resourceType.replace(/::/g, '/');
+
     let credentials: AwsCredentialIdentity | null = null;
-    if (providerCredentials && providerCredentials.AccessKeyId) {
+    if (ProviderCredentials && ProviderCredentials.AccessKeyId) {
         credentials = {
-            accessKeyId: providerCredentials.AccessKeyId,
-            secretAccessKey: providerCredentials.SecretAccessKey,
-            sessionToken: providerCredentials.SessionToken,
+            accessKeyId: ProviderCredentials.AccessKeyId,
+            secretAccessKey: ProviderCredentials.SecretAccessKey,
+            sessionToken: ProviderCredentials.SessionToken,
         };
     }
 
-    const metrics = new MetricsPublisher(log, credentials, resourceType);
+    const metrics = new MetricsPublisher(
+        log,
+        credentials,
+        resourceType,
+        telemetryPrefix
+    );
 
     if (!credentials) {
-        return [defaultLogger.child(childContext), metrics];
+        return [
+            defaultLogger.child(childContext),
+            metrics,
+            [metrics.queue, null],
+        ];
     }
 
-    const prefix = getCloudWatchPrefix(request.RequestType, request);
     const logStream = new CloudWatchLogsStream({
-        logGroupName: request.RequestData.ProviderLogGroupName!,
-        logStreamName: prefix,
+        logGroupName: event.ProviderLogGroupName!,
+        logStreamName: telemetryPrefix,
         credentials: credentials,
         log,
         metrics,
@@ -58,8 +81,12 @@ export async function getInstrumentation(
         await logStream.ensureLogGroup();
     } catch (e) {
         log.error(e, 'Error ensuring log group');
-        metrics.publishExceptionMetric(new Date(), request.Action!, e);
-        return [defaultLogger.child(childContext), metrics];
+        metrics.publishLogDeliveryExceptionMetric(new Date(), e as Error);
+        return [
+            defaultLogger.child(childContext),
+            metrics,
+            [metrics.queue, null],
+        ];
     }
 
     const requestLogger = pino(
@@ -69,13 +96,5 @@ export async function getInstrumentation(
         },
         multistream([logStream, lambdaDestination])
     );
-    return [requestLogger, metrics];
-}
-
-function getCloudWatchPrefix(resourceType: string, request: BaseRequest) {
-    let cwPrefix = `/${resourceType.replace('::', '/')}/`;
-    if (request.RequestData.LogicalResourceId) {
-        cwPrefix += request.RequestData.LogicalResourceId + '/';
-    }
-    return cwPrefix;
+    return [requestLogger, metrics, [metrics.queue, logStream.queue]];
 }

@@ -17,6 +17,8 @@ const CredentialsSchema = v.object({
     SessionToken: v.string(),
 });
 
+export type RequestAwsCredentials = TypeOf<typeof CredentialsSchema>;
+
 export const RequestContextSchema = v
     .object({
         Invocation: v.number(),
@@ -43,6 +45,7 @@ export const RequestDataSchema = v
 export const RequestSchema = v
     .object({
         AWSAccountId: v.string(),
+        StackID: v.string(),
         Region: v.string().required(),
         BearerToken: v.string(),
         Action: ActionType.required(),
@@ -82,6 +85,7 @@ export const TestRequestSchema = v
             .required(),
         callbackContext: v.anyOf([v.object({}).additional(true), v.null()]),
         region: v.string(),
+        logGroupName: v.string(),
     })
     .additional(true);
 
