@@ -181,7 +181,8 @@ class TypescriptLanguagePlugin(LanguagePlugin):
         # run generation cli for models.ts
         if self._is_init_phase and self._skip_npm_install:
             LOG.warning(
-                "Generate step skipped. You will need to run it manually after running npm install."
+                "Generate step skipped. "
+                "You will need to run it manually after running npm install."
             )
         else:
             LOG.warning("Running generate. This may take a few seconds...")
@@ -203,7 +204,7 @@ class TypescriptLanguagePlugin(LanguagePlugin):
             {
                 "AWSTemplateFormatVersion": "2010-09-09",
                 "Transform": "AWS::Serverless-2016-10-31",
-                "Description": f"AWS SAM template for the {project.type_name} resource type",
+                "Description": f"AWS SAM template for the {project.type_name} resource type",  # noqa: E501
                 "Resources": {
                     f"{MAIN_HANDLER_FUNCTION}": {
                         "Type": "AWS::Serverless::Function",

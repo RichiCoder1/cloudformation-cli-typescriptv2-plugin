@@ -1,7 +1,6 @@
 import logging
 import subprocess
 import shutil
-import sys
 from typing import Optional
 
 from rpdk.core.exceptions import InternalError
