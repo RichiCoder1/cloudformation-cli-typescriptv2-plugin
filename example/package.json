@@ -1,7 +1,7 @@
 {
-  "name": "test-type",
-  "version": "1.0.0",
+  "name": "test-test-test",
   "description": "AWS custom resource provider named Test::Test::Test.",
+  "version": "0.1.0",
   "private": true,
   "main": "dist/handlers.js",
   "type": "module",
@@ -12,7 +12,7 @@
     "type-check": "npx tsc",
     "generate": "cfn-js generate --schema test-test-test.json",
     "prebuild": "tsup",
-    "invoke:test": "sam local invoke -t build/template.yaml TestEntrypoint",
+    "invoke:test": "sam local invoke -t build/template.yaml TestEntrypoint --log-file test-invoke.log",
     "build": "sam build --build-dir build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -21,10 +21,7 @@
     "tsup": "^6.6.3",
     "typescript": "^4.9.5"
   },
-  "optionalDependencies": {
-    "aws-sdk": "^2.656.0"
-  },
   "dependencies": {
-    "@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib": "^2.0.0-a0"
+    "@richicoder/cloudformation-cli-typescriptv2-lib": "^0.1.0-a0"
   }
 }

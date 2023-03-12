@@ -1,31 +1,6 @@
 {
+  "extends": "@richicoder/cloudformation-cli-typescriptv2-lib/dist/config/tsconfig.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "Node16",
-    "moduleResolution": "node16",
-    "noImplicitAny": true,
-    "alwaysStrict": true,
-    "esModuleInterop": true,
-    "allowJs": true,
-    "noEmit": true,
-    "baseUrl": ".",
-    "rootDirs": [
-      ".",
-      ".cfn/typescript/generated"
-    ],
-    "paths": {
-      "@/*": [
-        "src/*",
-      ],
-      "$cfn/*": [
-        ".cfn/typescript/generated/*"
-      ]
-    }
-  },
-  "include": [
-    "src/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+    "baseUrl": "./"
+  }
 }

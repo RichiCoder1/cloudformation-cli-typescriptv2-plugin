@@ -1,0 +1,6 @@
+{
+  "extends": "{{lib_name}}/dist/config/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "./"
+  }
+}

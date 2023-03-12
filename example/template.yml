@@ -1,23 +1,25 @@
 AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
 Description: AWS SAM template for the Test::Test::Test resource type
 Resources:
-  TestEntrypoint:
-    Properties:
-      CodeUri: ./
-      Handler: dist/handlers.testEntrypoint
-      Runtime: nodejs18.x
-      Timeout: 30
-      MemorySize: 1024
-      Environment:
-        Variables:
-          NODE_ENV: dev
-          LOG_LEVEL: debug
-          NODE_OPTIONS: --enable-source-maps
-    Type: AWS::Serverless::Function
   TypeFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ./
       Handler: dist/handlers.entrypoint
       Runtime: nodejs18.x
+      CodeUri: ./
+      MemorySize: 1024
+      Timeout: 30
+  TestEntrypoint:
     Type: AWS::Serverless::Function
-Transform: AWS::Serverless-2016-10-31
+    Properties:
+      Handler: dist/handlers.testEntrypoint
+      Runtime: nodejs18.x
+      CodeUri: ./
+      MemorySize: 1024
+      Timeout: 30
+      Environment:
+        Variables:
+          NODE_ENV: test
+          LOG_LEVEL: debug
+          NODE_OPTIONS: --enable-source-maps

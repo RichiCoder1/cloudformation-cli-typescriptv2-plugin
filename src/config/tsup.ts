@@ -1,25 +1,27 @@
 import { defineConfig, type Options } from 'tsup';
+
+const requirePatch = `
+const { require, __filename, __dirname } = await (async () => {
+	const { createRequire } = await import("node:module");
+	const { fileURLToPath } = await import("node:url");
+
+	return {
+		require: createRequire(import.meta.url),
+		__filename: fileURLToPath(import.meta.url),
+		__dirname: fileURLToPath(new URL(".", import.meta.url)),
+	};
+})();`.trim();
+
 export const defaultConfig = defineConfig({
     entry: ['src/**/*'],
     format: ['esm'],
     platform: 'node',
-    skipNodeModulesBundle: true,
-    noExternal: [
-        /* Make sure we bundle generated code */
-        /^\$cfn/,
-        /^\.cfn/,
-        /* Bundle app code that's using paths */ /^@\//,
-        /* Bundle esbuild shims too */
-        /tsup.*shims\.js$/,
-    ],
     dts: false,
     bundle: true,
     clean: true,
     sourcemap: true,
-    shims: true,
-    define: {
-        'process.env.NODE_ENV': process.env.NODE_ENV
-            ? `"${process.env.NODE_ENV}"`
-            : '"development"',
+    minify: true,
+    banner: {
+        js: requirePatch,
     },
 }) as Options;

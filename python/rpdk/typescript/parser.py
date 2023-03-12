@@ -3,11 +3,11 @@ import argparse
 
 def setup_subparser(subparsers: argparse._SubParsersAction, parents):
     parser: argparse.ArgumentParser = subparsers.add_parser(
-        "typescript",
+        "typescriptv2",
         description="This sub command generates IDE and build files for TypeScript",
         parents=parents,
     )
-    parser.set_defaults(language="typescript")
+    parser.set_defaults(language="typescriptv2")
 
     # TODO: use BooleanOptionalAction once we drop support for Python 3.8
     group = parser.add_mutually_exclusive_group()
@@ -50,7 +50,8 @@ def setup_subparser(subparsers: argparse._SubParsersAction, parents):
     )
     parser.set_defaults(skip_npm_install=False)
 
-    parser.add_argument("--npm-link", action="store_true", help=argparse.SUPPRESS)
-    parser.set_defaults(npm_link=False)
+    # Hidden option for testing purposes
+    parser.add_argument("--local-registry", action="store_true", help=argparse.SUPPRESS)
+    parser.set_defaults(local_registry=False)
 
     return parser

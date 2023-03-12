@@ -3,7 +3,7 @@ import { resourceBuilder } from '$cfn/index.js';
 const { entrypoint, testEntrypoint } = resourceBuilder
     .handle({
         async create(event) {
-            this.logger.info({ properties: event.properties });
+            this.logger.info(event.properties);
             return this.created({
                 // ID (from primaryIdentifies) is required
                 // Will return a type error if not provided

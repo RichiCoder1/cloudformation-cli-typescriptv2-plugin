@@ -45,8 +45,9 @@ class TypescriptLanguagePlugin(LanguagePlugin):
         self.package_name = None
         self.package_root = None
         self._use_docker = None
+        self._jsify_properties = False
         self._skip_npm_install = False
-        self._npm_link = False
+        self._local_registry = False
         self._protocol_version = "2.0.0"
         self._build_command = None
         self._lib_path = None
@@ -80,11 +81,12 @@ class TypescriptLanguagePlugin(LanguagePlugin):
         else:
             self._skip_npm_install = project.settings.get("skip_npm_install")
 
-        project.settings["jsify_properties"] = project.settings.get("jsify_properties")
         project.settings["use_docker"] = self._use_docker
-        project.settings["skip_npm_install"] = self._skip_npm_install
-        project.settings["npm_link"] = self._npm_link
         project.settings["protocolVersion"] = self._protocol_version
+
+        self._skip_npm_install = project.settings.get("skip_npm_install")
+        self._local_registry = project.settings.get("local_registry")
+        self._jsify_properties = project.settings.get("jsify_properties")
 
     def init(self, project: Project):
         LOG.debug("Init started")
@@ -125,11 +127,13 @@ class TypescriptLanguagePlugin(LanguagePlugin):
 
         # project support files
         _copy_resource(project.root / ".gitignore", "typescript.gitignore")
-        _copy_resource(project.root / ".npmrc")
         sam_tests_folder = project.root / "sam-tests"
         sam_tests_folder.mkdir(exist_ok=True)
         _copy_resource(sam_tests_folder / "create.json")
-        _copy_resource(project.root / "tsconfig.json")
+        _render_template(
+            project.root / "tsconfig.json",
+            lib_name=SUPPORT_LIB_NAME,
+        )
         _render_template(
             project.root / "tsup.config.ts",
             lib_name=SUPPORT_LIB_NAME,
@@ -141,6 +145,7 @@ class TypescriptLanguagePlugin(LanguagePlugin):
             lib_name=SUPPORT_LIB_NAME,
             lib_path=self._lib_path,
             use_docker=self._use_docker,
+            jsify_properties=self._jsify_properties,
             schema=project.schema_filename,
             type_configuration=project.configuration_schema_filename,
         )
@@ -154,13 +159,14 @@ class TypescriptLanguagePlugin(LanguagePlugin):
         )
         self._render_sam_template(project)
 
-        if self._npm_link:
-            run_tool_cmd("npm", ["link", SUPPORT_LIB_NAME])
+        if self._local_registry:
+            shutil.rmtree(project.root / "node_modules", ignore_errors=True)
+            _copy_resource(project.root / ".npmrc", "integration.npmrc")
 
         # install npm dependencies
         if self._skip_npm_install is False:
             LOG.warning("Installing npm dependencies. This may take a few minutes...")
-            run_tool_cmd("npm", ["install", "--include=optional"])
+            run_tool_cmd("npm", ["install"])
         else:
             LOG.warning("Skipping npm install. You will need to run it manually.")
 
@@ -178,6 +184,7 @@ class TypescriptLanguagePlugin(LanguagePlugin):
                 "Generate step skipped. You will need to run it manually after running npm install."
             )
         else:
+            LOG.warning("Running generate. This may take a few seconds...")
             run_tool_cmd("npm", ["run", "generate"])
 
         LOG.debug("Generate complete")
@@ -188,13 +195,10 @@ class TypescriptLanguagePlugin(LanguagePlugin):
             "Handler": project.entrypoint,
             "Runtime": project.runtime,
             "CodeUri": self.CODE_URI,
+            "MemorySize": 1024,
+            "Timeout": 15,
         }
 
-        function_metadata = {
-            "BuildProperties": {
-                "UseNpmCi": True,
-            },
-        }
         sam_template = yaml.dump(
             {
                 "AWSTemplateFormatVersion": "2010-09-09",
@@ -206,18 +210,25 @@ class TypescriptLanguagePlugin(LanguagePlugin):
                         "Properties": {
                             **function_properties,
                         },
-                        "Metadata": function_metadata,
                     },
                     "TestEntrypoint": {
                         "Type": "AWS::Serverless::Function",
                         "Properties": {
                             **function_properties,
                             "Handler": project.test_entrypoint,
+                            "Environment": {
+                                "Variables": {
+                                    "NODE_ENV": "test",
+                                    "LOG_LEVEL": "debug",
+                                    "NODE_OPTIONS": "--enable-source-maps",
+                                }
+                            },
                         },
-                        "Metadata": function_metadata,
                     },
                 },
-            }
+            },
+            default_flow_style=False,
+            sort_keys=False,
         )
         project.safewrite(project.root / "template.yml", sam_template)
 

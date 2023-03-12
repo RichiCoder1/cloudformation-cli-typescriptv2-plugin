@@ -1,3 +1,3 @@
-import { defaultConfig } from "@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib/dist/config/tsup.js";
+import { defaultConfig } from '@richicoder/cloudformation-cli-typescriptv2-lib/config/tsup';
 
 export default defaultConfig;

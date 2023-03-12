@@ -28,6 +28,9 @@ packages:
   "@amazon-web-services-cloudformation/*":
     access: $all
     publish: $all
+  "@richicoder/cloudformation-*":
+    access: $all
+    publish: $all
   "@*/*":
     access: $all
     publish: $authenticated

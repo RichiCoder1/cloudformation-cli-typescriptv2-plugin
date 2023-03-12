@@ -5,14 +5,18 @@
   "private": false,
   "type": "module",
   "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "files": [
     "bin/*",
-    "dist/**/*.d.ts",
-    "dist/**/*.js"
+    "dist/"
   ],
   "bin": {
     "cfn-js": "./bin/cfn-js.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./dist/config/tsconfig.json": "./dist/config/tsconfig.json",
+    "./*": "./dist/*.js",
+    "./package.json": "./package.json"
   },
   "tsup": {
     "entry": [
@@ -25,7 +29,8 @@
     "dts": true,
     "bundle": false,
     "clean": true,
-    "sourcemap": true
+    "sourcemap": true,
+    "publicDir": "include"
   },
   "publishConfig": {
     "access": "public"

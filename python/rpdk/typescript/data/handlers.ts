@@ -7,20 +7,20 @@ const { entrypoint, testEntrypoint } = resourceBuilder
             return this.created({
                 // ID (from primaryIdentifies) is required
                 // Will return a type error if not provided
-                tpsCode: '123456679',
+                TPSCode: '123456679',
                 // Standard required properties
-                title: 'My Title',
-                testCode: 'NOT_STARTED',
+                Title: 'My Title',
+                TestCode: 'NOT_STARTED',
             });
         },
         async update(event) {
             return this.updated({
                 // ID (from primaryIdentifies) is required
                 // Will return a type error if not provided
-                tpsCode: '123456679',
+                TPSCode: '123456679',
                 // Standard required properties
-                title: 'My Title',
-                testCode: 'NOT_STARTED',
+                Title: 'My Title',
+                TestCode: 'NOT_STARTED',
             });
         },
         async delete(event) {
@@ -30,10 +30,10 @@ const { entrypoint, testEntrypoint } = resourceBuilder
             return this.readResult({
                 // ID (from primaryIdentifies) is required
                 // Will return a type error if not provided
-                tpsCode: '123456679',
+                TPSCode: '123456679',
                 // Standard required properties
-                title: 'My Title',
-                testCode: 'NOT_STARTED',
+                Title: 'My Title',
+                TestCode: 'NOT_STARTED',
             });
         },
         async list(event) {
@@ -42,7 +42,7 @@ const { entrypoint, testEntrypoint } = resourceBuilder
                     {
                         // ID (from primaryIdentifies) is required
                         // Will return a type error if not provided
-                        tpsCode: '123456679',
+                        TPSCode: '123456679',
                     },
                 ],
                 null

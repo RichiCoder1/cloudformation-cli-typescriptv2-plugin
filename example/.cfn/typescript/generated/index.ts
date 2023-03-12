@@ -1,6 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
-import { ResourceBuilderBase } from '@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib';
+import { ResourceBuilderBase } from '@richicoder/cloudformation-cli-typescriptv2-lib';
 import { schemaResourceProperties, schemaTypeConfiguration, ResourceProperties, TypeConfiguration } from './schema.js';
 
 export const TypeName = 'Test::Test::Test';

@@ -8,24 +8,17 @@
     "esModuleInterop": true,
     "allowJs": true,
     "noEmit": true,
-    "baseUrl": ".",
     "rootDirs": [
       "src",
       ".cfn/typescript/generated"
     ],
     "paths": {
       "@/*": [
-        "src/*",
+        "src/*"
       ],
-      "$cfn": [
-        ".cfn/typescript/generated"
+      "$cfn/*": [
+        ".cfn/typescript/generated/*"
       ]
     }
-  },
-  "include": [
-    "src/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+  }
 }
