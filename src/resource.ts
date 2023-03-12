@@ -44,15 +44,14 @@ export interface ResourceHandlerProperties<
     readonly schema: TProperties;
     readonly ids: readonly TPrimaryKeys[];
     readonly typeConfigurationSchema: TTypeConfiguration;
-    readonly transformProperties: {
+    transformProperties?: {
         toJS: (properties: unknown) => TTransformedProperties;
         fromJS: (properties: unknown) => TypeOf<TProperties>;
     };
-    readonly transformTypeConfiguration: {
-        toJS: (properties: unknown) => TTransformedTypeConfiguration;
-        fromJS: (properties: unknown) => TypeOf<TTypeConfiguration>;
+    transformTypeConfiguration?: {
+        toJS: (typeConfiguration: unknown) => TTransformedTypeConfiguration;
     };
-    readonly transformIds: {
+    transformIds?: {
         fromJS: (ids: Record<TPrimaryKeys, unknown>) => Record<any, unknown>;
     };
 }
@@ -160,6 +159,18 @@ export abstract class ResourceBuilderBase<
         >
     ) {
         this.typeName = options.typeName;
+        options.transformProperties = options.transformProperties ?? {
+            toJS: (properties: unknown) => properties as TProperties,
+            fromJS: (properties: unknown) =>
+                properties as TypeOf<TPropertiesSchema>,
+        };
+        options.transformTypeConfiguration =
+            options.transformTypeConfiguration ?? {
+                toJS: (properties: unknown) => properties as TTypeConfiguration,
+            };
+        options.transformIds = options.transformIds ?? {
+            fromJS: (ids: Record<TPrimaryKeys, unknown>) => ids,
+        };
     }
 
     public handle(
@@ -195,14 +206,8 @@ export abstract class ResourceBuilderBase<
             });
 
             // In dev, validate the outgoing models to identify errors earlier
-            if ('ResourceModel' in result) {
+            if ('ResourceModel' in result && testData.action !== 'READ') {
                 this.#ensure(this.options.schema, result.ResourceModel);
-            }
-
-            if ('ResourceModels' in result) {
-                for (const model of result.ResourceModels) {
-                    this.#ensure(this.options.schema, model);
-                }
             }
             this.logger.info({ result }, 'Successfully got result.');
             return result;
@@ -274,7 +279,10 @@ export abstract class ResourceBuilderBase<
                     };
             }
         } catch (e) {
-            defaultLogger.error(e, 'Failed to parse request');
+            defaultLogger.error(
+                e,
+                'Resource handler failed to process request'
+            );
             return this.#getErrorForException(e);
         }
     }
@@ -296,7 +304,7 @@ export abstract class ResourceBuilderBase<
         const createHandler = this.#handlers!.create.bind(this);
         const result = await createHandler({
             action,
-            properties: this.options.transformProperties.toJS(properties),
+            properties: this.options.transformProperties?.toJS(properties),
             logger: this.#logger,
             typeConfiguration:
                 this.options.transformTypeConfiguration.toJS(typeConfiguration),

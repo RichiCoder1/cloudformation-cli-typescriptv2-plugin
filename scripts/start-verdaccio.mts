@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 
-import { $, os, path } from "zx";
+import { $, argv, os, path, ProcessPromise } from "zx";
+import { watch } from "chokidar";
 
 const verdaccioContainer = "verdaccio";
 
@@ -24,4 +25,25 @@ await $`docker run -d --rm --name ${verdaccioContainer} -p 4873:4873 --mount typ
 
 const registryUrl = "http://localhost:4873";
 process.env["npm_config_//localhost:4873/:_authToken"] = "test";
-$`npm publish --registry ${registryUrl}`;
+
+let activePublish: ProcessPromise | null = null;
+function publish() {
+  if (activePublish !== null) {
+    return activePublish;
+  }
+  activePublish = $`npm publish --registry ${registryUrl}`;
+  return activePublish;
+}
+
+await publish();
+
+if (argv.watch) {
+  console.error("Watching for changes...");
+  const watcher = watch("src/**/*", {
+    persistent: true,
+  });
+
+  watcher.on("change", async () => {
+    await publish();
+  });
+}

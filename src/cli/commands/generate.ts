@@ -18,6 +18,8 @@ import {
     acronymStyle,
     AcronymStyleOptions,
 } from 'quicktype-core/dist/support/Acronyms.js';
+import { default as tsDedent } from 'ts-dedent';
+const { dedent } = tsDedent;
 
 const jsifier = (original: string) => {
     const acronyms = acronymStyle(AcronymStyleOptions.Pascal);
@@ -53,6 +55,11 @@ export const generate = (program: Program): Program =>
                     type: 'string',
                     description: 'The output directory for generated code.',
                     default: '.cfn/typescript/generated',
+                })
+                .option('jsify', {
+                    type: 'boolean',
+                    description: 'The output directory for generated code.',
+                    default: false,
                 }),
         async (argv) => {
             const { makeConverter, getJsonSchemaReader, getSureTypeWriter } =
@@ -61,13 +68,10 @@ export const generate = (program: Program): Program =>
             const {
                 default: { readJson, exists, mkdirp, writeFile, emptyDir },
             } = await import('fs-extra');
-            const {
-                default: { dedent },
-            } = await import('ts-dedent');
             const { v, extractSingleJsonSchema } = await import('suretype');
             const { JsonPointer } = await import('json-ptr');
 
-            const { schema, root, out } = argv;
+            const { schema, root, out, jsify } = argv;
 
             if (!(await exists(schema))) {
                 console.error(`Schema file ${schema} does not exist.`);
@@ -118,7 +122,6 @@ export const generate = (program: Program): Program =>
             const idPaths: string[] = resource['primaryIdentifier'];
             const additionalIdPaths: string[] =
                 resource['additionalIdentifiers'] ?? [];
-            const allIds = new Set<string>();
             const requiredIds = new Set<string>();
             const additionalIds = new Set<string>();
             for (const id of idPaths) {
@@ -140,7 +143,6 @@ export const generate = (program: Program): Program =>
                     );
                 }
                 requiredIds.add(path[1]);
-                allIds.add(path[1]);
             }
 
             for (const id of additionalIdPaths) {
@@ -162,160 +164,223 @@ export const generate = (program: Program): Program =>
                     );
                 }
                 additionalIds.add(path[1]);
-                allIds.add(path[1]);
             }
 
             const { data } = await convert({ data: { definitions } as any });
 
             await writeFile(join(outputDirectory, 'schema.ts'), data, 'utf8');
 
-            const reverseIdMap: Record<string, string> = {};
-            for (const id of allIds) {
-                reverseIdMap[jsifier(id)] = id;
-            }
+            const indexSource = jsify
+                ? getTransformedEmit(
+                      Array.from(requiredIds),
+                      Array.from(additionalIds),
+                      schemaJson.typeName
+                  )
+                : getUntransformedEmit(
+                      Array.from(requiredIds),
+                      Array.from(additionalIds),
+                      schemaJson.typeName
+                  );
 
-            const model = dedent`
-              /* tslint:disable */
-              /* eslint-disable */
-              import { ResourceBuilderBase } from '@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib';
-              import { schemaResourceProperties, schemaTypeConfiguration } from './schema.js';
-              import {
-                  Convert,
-                  TransformedResourceProperties,
-                  TransformedTypeConfiguration,
-              } from './transformer.js';
+            await writeFile(join(outputDirectory, 'index.ts'), indexSource);
 
-              export const TypeName = '${schemaJson.typeName}';
-
-              export const PrimaryIds = [
-                ${[...requiredIds].map((id) => `'${jsifier(id)}'`).join(',\n')}
-              ] as const;
-              export type PrimaryId = typeof PrimaryIds[number];
-
-              export const AdditionalIds = [
-                ${[...additionalIds]
-                    .map((id) => `'${jsifier(id)}'`)
-                    .join(',\n')}
-              ] as const;
-              export type AdditionalId = typeof AdditionalIds[number];
-
-              export const MapIds = ${JSON.stringify(
-                  reverseIdMap,
-                  null,
-                  2
-              )} as const;
-
-              export type PropertiesSchema = typeof schemaResourceProperties;
-              export type TypeConfigurationSchema = typeof schemaTypeConfiguration;
-
-              export class ResourceBuilder extends ResourceBuilderBase<
-                  PropertiesSchema,
-                  TypeConfigurationSchema,
-                  PrimaryId,
-                  AdditionalId,
-                  TransformedResourceProperties,
-                  TransformedTypeConfiguration
-              > {
-                constructor() {
-                    super({
-                        typeName: TypeName,
-                        schema: schemaResourceProperties.additional(false),
-                        typeConfigurationSchema: schemaTypeConfiguration.additional(false),
-                        ids: PrimaryIds,
-                        transformProperties: {
-                            toJS: Convert.toTransformedResourceProperties,
-                            fromJS: Convert.transformedResourcePropertiesToJson,
-                        },
-                        transformTypeConfiguration: {
-                            toJS: Convert.toTransformedTypeConfiguration,
-                            fromJS: Convert.transformedTypeConfigurationToJson,
-                        },
-                        transformIds: {
-                            fromJS: (ids: Record<PrimaryId | AdditionalId, unknown>) => {
-                                const result: Record<typeof MapIds[keyof typeof MapIds], unknown> = {} as any;
-                                for (const [key, value] of Object.entries(ids)) {
-                                    const mapKey = MapIds[key as PrimaryId | AdditionalId];
-                                    if (!mapKey) {
-                                        throw new Error(
-                                            \`Unknown id \${key}. Make sure you're only setting id properties on the result.\`
-                                        );
-                                    }
-                                    result[mapKey] = value;
-                                }
-                                return result;
-                            },
-                        },
-                    });
-                }
-              }
-
-              export const resourceBuilder = new ResourceBuilder();
-
-              export * from './schema.js';
-            `;
-
-            await writeFile(join(outputDirectory, 'index.ts'), model);
-
-            const quickTypeSchema = structuredClone(schemaJson);
-            quickTypeSchema.type = 'object';
-            quickTypeSchema.additionalProperties = false;
-            quickTypeSchema.definitions['TypeConfiguration'] =
-                typeConfigurationSchema;
-            const schemaInput = new JSONSchemaInput(
-                new FetchingJSONSchemaStore()
-            );
-
-            // We could add multiple schemas for multiple types,
-            // but here we're just making one type from JSON schema.
-            await schemaInput.addSource({
-                name: 'TransformedResourceProperties',
-                schema: JSON.stringify(quickTypeSchema),
-            });
-            await schemaInput.addSource({
-                name: 'TransformedTypeConfiguration',
-                schema: JSON.stringify(typeConfigurationSchema),
-            });
-
-            const inputData = new InputData();
-            inputData.addInput(schemaInput);
-
-            const result = await quicktype({
-                inputData,
-                lang: 'typescript',
-                rendererOptions: {
-                    converters: 'all-objects',
-                    'raw-type': 'any',
-                    'nice-property-names': 'true',
-                    'prefer-unions': 'true',
-                    'acronym-style': 'camel',
-                },
-            });
-
-            const transformer = dedent`
-            /* tslint:disable */
-            /* eslint-disable */
-            /**
-             * This file is generated by quicktype on behalf of cloudformation-cli-typescript-plugin, DO NOT EDIT.
-             * For more information, see:
-             *  - {@link https://github.com/quicktype/quicktype}
-             *  - {@link https://github.com/aws-cloudformation/cloudformation-cli-typescript-plugin}
-             */
-            ${fixupQuicktype(result.lines)}
-            `;
-
-            await writeFile(
-                join(outputDirectory, 'transformer.ts'),
-                transformer,
-                'utf8'
-            );
-
-            function fixupQuicktype(lines: string[]) {
-                let aggregated = lines.join('\n');
-                aggregated = aggregated.replace(
-                    /props: \[\], additional/i,
-                    'props: [] as any[], additional'
+            /** Only emit transformer mapper if we're mapping between cases */
+            if (jsify) {
+                const quickTypeSchema = structuredClone(schemaJson);
+                quickTypeSchema.type = 'object';
+                quickTypeSchema.additionalProperties = false;
+                quickTypeSchema.definitions['TypeConfiguration'] =
+                    typeConfigurationSchema;
+                const schemaInput = new JSONSchemaInput(
+                    new FetchingJSONSchemaStore()
                 );
-                return aggregated;
+
+                // We could add multiple schemas for multiple types,
+                // but here we're just making one type from JSON schema.
+                await schemaInput.addSource({
+                    name: 'TransformedResourceProperties',
+                    schema: JSON.stringify(quickTypeSchema),
+                });
+                await schemaInput.addSource({
+                    name: 'TransformedTypeConfiguration',
+                    schema: JSON.stringify(typeConfigurationSchema),
+                });
+
+                const inputData = new InputData();
+                inputData.addInput(schemaInput);
+
+                const result = await quicktype({
+                    inputData,
+                    lang: 'typescript',
+                    rendererOptions: {
+                        converters: 'all-objects',
+                        'raw-type': 'any',
+                        'nice-property-names': 'true',
+                        'prefer-unions': 'true',
+                        'acronym-style': 'camel',
+                    },
+                });
+
+                const transformer = dedent`
+                    /* tslint:disable */
+                    /* eslint-disable */
+                    /**
+                     * This file is generated by quicktype on behalf of cloudformation-cli-typescript-plugin, DO NOT EDIT.
+                     * For more information, see:
+                     *  - {@link https://github.com/quicktype/quicktype}
+                     *  - {@link https://github.com/aws-cloudformation/cloudformation-cli-typescript-plugin}
+                     */
+                    ${fixupQuicktype(result.lines)}
+                `;
+
+                await writeFile(
+                    join(outputDirectory, 'transformer.ts'),
+                    transformer,
+                    'utf8'
+                );
+
+                function fixupQuicktype(lines: string[]) {
+                    let aggregated = lines.join('\n');
+                    aggregated = aggregated.replace(
+                        /props: \[\], additional/i,
+                        'props: [] as any[], additional'
+                    );
+                    return aggregated;
+                }
             }
         }
     );
+
+function getUntransformedEmit(
+    primaryIds: string[],
+    additionalIds: string[],
+    typeName: string
+) {
+    return dedent`
+    /* tslint:disable */
+    /* eslint-disable */
+    import { ResourceBuilderBase } from '@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib';
+    import { schemaResourceProperties, schemaTypeConfiguration, ResourceProperties, TypeConfiguration } from './schema.js';
+
+    export const TypeName = '${typeName}';
+
+    export const PrimaryIds = [
+      ${[...primaryIds].map((id) => `'${id}'`).join(',\n')}
+    ] as const;
+    export type PrimaryId = typeof PrimaryIds[number];
+
+    export const AdditionalIds = [
+      ${[...additionalIds].map((id) => `'${id}'`).join(',\n')}
+    ] as const;
+    export type AdditionalId = typeof AdditionalIds[number];
+
+    export type PropertiesSchema = typeof schemaResourceProperties;
+    export type TypeConfigurationSchema = typeof schemaTypeConfiguration;
+
+    export class ResourceBuilder extends ResourceBuilderBase<
+        PropertiesSchema,
+        TypeConfigurationSchema,
+        PrimaryId,
+        AdditionalId,
+        ResourceProperties,
+        TypeConfiguration
+    > {
+      constructor() {
+          super({
+              typeName: TypeName,
+              schema: schemaResourceProperties.additional(false),
+              typeConfigurationSchema: schemaTypeConfiguration.additional(false),
+              ids: PrimaryIds,
+          });
+      }
+    }
+
+    export const resourceBuilder = new ResourceBuilder();
+
+    export * from './schema.js';
+  `;
+}
+
+function getTransformedEmit(
+    primaryIds: string[],
+    additionalIds: string[],
+    typeName: string
+) {
+    const reverseIdMap: Record<string, string> = {};
+    for (const id of [...primaryIds, ...primaryIds]) {
+        reverseIdMap[jsifier(id)] = id;
+    }
+
+    return dedent`
+    /* tslint:disable */
+    /* eslint-disable */
+    import { ResourceBuilderBase } from '@amazon-web-services-cloudformation/cloudformation-cli-typescriptv2-lib';
+    import { schemaResourceProperties, schemaTypeConfiguration } from './schema.js';
+    import {
+        Convert,
+        TransformedResourceProperties,
+        TransformedTypeConfiguration,
+    } from './transformer.js';
+
+    export const TypeName = '${typeName}';
+
+    export const PrimaryIds = [
+      ${[...primaryIds].map((id) => `'${jsifier(id)}'`).join(',\n')}
+    ] as const;
+    export type PrimaryId = typeof PrimaryIds[number];
+
+    export const AdditionalIds = [
+      ${[...additionalIds].map((id) => `'${jsifier(id)}'`).join(',\n')}
+    ] as const;
+    export type AdditionalId = typeof AdditionalIds[number];
+
+    export const MapIds = ${JSON.stringify(reverseIdMap, null, 2)} as const;
+
+    export type PropertiesSchema = typeof schemaResourceProperties;
+    export type TypeConfigurationSchema = typeof schemaTypeConfiguration;
+
+    export class ResourceBuilder extends ResourceBuilderBase<
+        PropertiesSchema,
+        TypeConfigurationSchema,
+        PrimaryId,
+        AdditionalId,
+        TransformedResourceProperties,
+        TransformedTypeConfiguration
+    > {
+      constructor() {
+          super({
+              typeName: TypeName,
+              schema: schemaResourceProperties.additional(false),
+              typeConfigurationSchema: schemaTypeConfiguration.additional(false),
+              ids: PrimaryIds,
+              transformProperties: {
+                  toJS: Convert.toTransformedResourceProperties,
+                  fromJS: Convert.transformedResourcePropertiesToJson,
+              },
+              transformTypeConfiguration: {
+                  toJS: Convert.toTransformedTypeConfiguration,
+              },
+              transformIds: {
+                  fromJS: (ids: Record<PrimaryId | AdditionalId, unknown>) => {
+                      const result: Record<typeof MapIds[keyof typeof MapIds], unknown> = {} as any;
+                      for (const [key, value] of Object.entries(ids)) {
+                          const mapKey = MapIds[key as PrimaryId | AdditionalId];
+                          if (!mapKey) {
+                              throw new Error(
+                                  \`Unknown id \${key}. Make sure you're only setting id properties on the result.\`
+                              );
+                          }
+                          result[mapKey] = value;
+                      }
+                      return result;
+                  },
+              },
+          });
+      }
+    }
+
+    export const resourceBuilder = new ResourceBuilder();
+
+    export * from './schema.js';
+  `;
+}

@@ -82,6 +82,7 @@ class TypescriptLanguagePlugin(LanguagePlugin):
         else:
             self._skip_npm_install = project.settings.get("skip_npm_install")
 
+        project.settings["jsify_properties"] = project.settings.get("jsify_properties")
         project.settings["use_docker"] = self._use_docker
         project.settings["skip_npm_install"] = self._skip_npm_install
         project.settings["npm_link"] = self._npm_link

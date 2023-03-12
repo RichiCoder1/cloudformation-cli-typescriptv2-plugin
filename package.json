@@ -22,12 +22,10 @@
       "esm"
     ],
     "platform": "node",
-    "noExternals": [
-      "camelcase-keys"
-    ],
     "dts": true,
     "bundle": false,
-    "clean": true
+    "clean": true,
+    "sourcemap": true
   },
   "publishConfig": {
     "access": "public"
@@ -56,7 +54,7 @@
     "@types/fs-extra": "^11.0.1",
     "@types/node": "^18.14.6",
     "@types/yargs": "^17.0.22",
-    "camelcase-keys": "^8.0.2",
+    "chokidar": "^3.5.3",
     "fs-extra": "^11.1.0",
     "suretype": "^3.2.1",
     "tsup": "^6.6.3",
@@ -66,7 +64,6 @@
   },
   "peerDependencies": {
     "aws-sdk": "^2.712.0",
-    "camelcase-keys": "^8.0.2",
     "suretype": "^3.2.1"
   },
   "peerDependenciesMeta": {

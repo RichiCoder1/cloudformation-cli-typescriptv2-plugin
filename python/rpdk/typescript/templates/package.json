@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "type-check": "npx tsc",
-    "generate": "cfn-js generate --schema {{ schema }}",
+    "generate": "cfn-js generate --schema {{ schema }}{% if jsify_properties %} --jsify{% endif %}",
     "prebuild": "tsup",
     "invoke:test": "sam local invoke -t build/template.yaml TestEntrypoint",
     "build": "sam build{% if use_docker %} --use-container{% endif %} --build-dir build",

@@ -27,6 +27,22 @@ def setup_subparser(subparsers: argparse._SubParsersAction, parents):
     )
     group.set_defaults(use_docker=False)
 
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--jsify-properties",
+        action="store_true",
+        dest="jsify_properties",
+        help="""Whether or not to camelCase property names in the generated code.
+            This may have surprising results, so enable will care.""",
+    )
+    group.add_argument(
+        "--no-jsify-properties",
+        action="store_false",
+        dest="use_docker",
+        help="""See --jsify-properties for more information.""",
+    )
+    group.set_defaults(use_docker=False)
+
     parser.add_argument(
         "--skip-npm-install",
         action="store_true",
