@@ -27,7 +27,7 @@ jobs:
           python -m ruff .
       - name: Test with pytest
         run: |
-          pythjon -m pytest
+          python -m pytest
 
   build-node:
     name: Node ${{ matrix.node-version }}
