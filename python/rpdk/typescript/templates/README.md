@@ -64,4 +64,24 @@ The standard `fetch` method does not provide any retry logic however, so conside
 
 ## Using the AWS SDK
 
-If you need to access AWS resources, first make sure you have the correct permissions required via `handlers.<event>.permissions` in your schema file. The [{{ lib_name }}](https://github.com/richicoder1/cloudformation-cli-typescriptv2-plugin) library then exposes these credentials via `event.credentials`. The AWS SDK v3 automatically provides retry and transient error logic, but be sure to handle any errors or use a library like `p-retry` if you need retry behavior.
+If you need to access AWS resources, first make sure you have the correct permissions required via `handlers.<event>.permissions` in your schema file. The [{{ lib_name }}](https://github.com/richicoder1/cloudformation-cli-typescriptv2-plugin) library has a helper that can be called via `the.getSdk` which accepts the target SDK as the first argument. For example:
+
+```typescript
+import { S3 } from '@aws-sdk/client-s3';
+/* ... */
+        async create(event) {
+            // type is the AWS SDK v3 S3 client automatically set to the current region and credentials
+            const sdk = this.getSdk(S3);
+            const result = await sdk.createBucket({
+                Bucket: event.properties.BucketName,
+            });
+            return this.created({
+                BucketName: result.BucketName,
+            });
+        },
+/* ... */
+```
+
+This method will automatically set the region and credentials for you, and currently doesn't allow overriding them.
+
+The AWS SDK v3 automatically provides retry and transient error logic, but be sure to handle any errors or use a library like `p-retry` if you need retry behavior.

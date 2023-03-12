@@ -5,7 +5,12 @@ import { isNativeError } from 'node:util/types';
 import { Logger, stdSerializers } from 'pino';
 import { ensure, ObjectValidator, TypeOf, ValidationError } from 'suretype';
 import { SetRequired } from 'type-fest';
-import { defaultProvider } from '@aws-sdk/credential-provider-node';
+import { defaultProvider as defaultNodeCredentials } from '@aws-sdk/credential-provider-node';
+import { AsyncLocalStorage } from 'node:async_hooks';
+// If there were a better way to get these types, I would.
+import type { AwsAuthInputConfig } from '@aws-sdk/middleware-signing/dist-types/configurations.js';
+import type { RegionInputConfig } from '@aws-sdk/config-resolver/dist-types/regionConfig/resolveRegionConfig.js';
+
 import {
     Action,
     BaseRequest,
@@ -117,7 +122,14 @@ interface GenericRequestEvent {
     resourceProperties: unknown;
     oldResourceProperties?: unknown;
     typeConfiguration?: unknown;
+}
+
+interface HandlerContext {
+    logger: Logger;
+    metrics: MetricsPublisher;
     credentials: AwsCredentialIdentity;
+    region: string;
+    action?: Action;
 }
 
 export abstract class ResourceBuilderBase<
@@ -138,16 +150,19 @@ export abstract class ResourceBuilderBase<
         TTypeConfiguration
     > | null = null;
 
-    #logger: Logger = defaultLogger;
-    #metrics: MetricsPublisher | null = null;
+    #context = new AsyncLocalStorage<HandlerContext>();
     typeName: string;
 
     get logger() {
-        return this.#logger ?? defaultLogger;
+        return this.#context.getStore()?.logger ?? defaultLogger;
     }
 
     get metrics() {
-        return this.#metrics;
+        return this.#context.getStore()?.metrics;
+    }
+
+    get currentAction() {
+        return this.#context.getStore()?.action ?? 'UNKNOWN';
     }
 
     constructor(
@@ -202,7 +217,7 @@ export abstract class ResourceBuilderBase<
             const testData = this.#ensure(TestRequestSchema, event);
             let credentials: RequestAwsCredentials | null = null;
             if (testData.logGroupName) {
-                const provider = defaultProvider();
+                const provider = defaultNodeCredentials();
                 const creds = await provider({});
                 credentials = {
                     AccessKeyId: creds.accessKeyId,
@@ -226,38 +241,63 @@ export abstract class ResourceBuilderBase<
                 context,
                 defaultLogger
             );
-            this.#logger = logger;
-            this.#metrics = metrics;
 
-            await this.#metrics.publishInvocationMetric(
-                new Date(),
-                testData.action
-            );
-
-            const result = await this.#handleRequest({
+            const handlerContext = {
+                logger,
+                metrics,
                 action: testData.action,
-                resourceProperties: testData.request.desiredResourceState,
-                oldResourceProperties: testData.request.previousResourceState,
-                typeConfiguration: testData.request.typeConfiguration,
                 credentials: testData.credentials,
+                region: testData.region,
+            } satisfies HandlerContext;
+
+            const result = await this.#context.run(handlerContext, async () => {
+                try {
+                    await this.metrics.publishInvocationMetric(
+                        new Date(),
+                        testData.action
+                    );
+
+                    const result = await this.#handleRequest({
+                        action: testData.action,
+                        resourceProperties:
+                            testData.request.desiredResourceState,
+                        oldResourceProperties:
+                            testData.request.previousResourceState,
+                        typeConfiguration: testData.request.typeConfiguration,
+                    });
+
+                    // In dev, validate the outgoing models to identify errors earlier
+                    if (
+                        'ResourceModel' in result &&
+                        testData.action !== 'READ'
+                    ) {
+                        this.#ensure(this.options.schema, result.ResourceModel);
+                    }
+                    this.logger.info({ result }, 'Successfully got result.');
+
+                    await this.metrics.publishDurationMetric(
+                        new Date(),
+                        testData.action,
+                        performance.now() - startTime
+                    );
+                    return result;
+                } catch (e) {
+                    this.logger.error(e, 'Failed to parse request');
+                    this.metrics.publishExceptionMetric(
+                        new Date(),
+                        event?.action,
+                        e
+                    );
+                    return this.#getErrorForException(e);
+                }
             });
 
-            // In dev, validate the outgoing models to identify errors earlier
-            if ('ResourceModel' in result && testData.action !== 'READ') {
-                this.#ensure(this.options.schema, result.ResourceModel);
-            }
-            this.logger.info({ result }, 'Successfully got result.');
-
-            await this.#metrics.publishDurationMetric(
-                new Date(),
-                testData.action,
-                performance.now() - startTime
-            );
+            // Wait for any metric or logger requests to drain.
+            // Both implement timeouts internally, so we shouldn't need to do so here.
             await Promise.all(queues.map((p) => p?.onIdle()));
             return result;
         } catch (e) {
-            this.logger.error(e, 'Failed to parse request');
-            this.metrics.publishExceptionMetric(new Date(), event?.action, e);
+            defaultLogger.error(e, 'Fatal error while handling event');
             return this.#getErrorForException(e);
         }
     }
@@ -283,13 +323,6 @@ export abstract class ResourceBuilderBase<
                 context,
                 defaultLogger
             );
-            this.#logger = logger;
-            this.#metrics = metrics;
-
-            await this.#metrics.publishInvocationMetric(
-                new Date(),
-                baseRequest.Action
-            );
 
             const callerCredentials = baseRequest.RequestData.CallerCredentials;
             const credentials = {
@@ -297,25 +330,54 @@ export abstract class ResourceBuilderBase<
                 secretAccessKey: callerCredentials?.SecretAccessKey,
                 sessionToken: callerCredentials?.SessionToken,
             } satisfies AwsCredentialIdentity;
-            const result = await this.#handleRequest({
+
+            const handlerContext = {
+                logger,
+                metrics,
                 action: baseRequest.Action,
-                resourceProperties: baseRequest.RequestData.ResourceProperties!,
-                oldResourceProperties:
-                    baseRequest.RequestData.PreviousResourceProperties,
-                typeConfiguration: baseRequest.RequestData.TypeConfiguration,
                 credentials,
+                region: baseRequest.Region,
+            } satisfies HandlerContext;
+
+            const result = await this.#context.run(handlerContext, async () => {
+                try {
+                    await this.metrics.publishInvocationMetric(
+                        new Date(),
+                        baseRequest.Action
+                    );
+
+                    const result = await this.#handleRequest({
+                        action: baseRequest.Action,
+                        resourceProperties:
+                            baseRequest.RequestData.ResourceProperties!,
+                        oldResourceProperties:
+                            baseRequest.RequestData.PreviousResourceProperties,
+                        typeConfiguration:
+                            baseRequest.RequestData.TypeConfiguration,
+                    });
+
+                    await this.metrics.publishDurationMetric(
+                        new Date(),
+                        baseRequest.Action,
+                        performance.now() - startTime
+                    );
+                    return result;
+                } catch (e) {
+                    this.logger.error(e, 'Failed to parse request');
+                    this.metrics.publishExceptionMetric(
+                        new Date(),
+                        event?.Action,
+                        e
+                    );
+                }
             });
 
-            await this.#metrics.publishDurationMetric(
-                new Date(),
-                baseRequest.Action,
-                performance.now() - startTime
-            );
+            // Wait for any metric or logger requests to drain.
+            // Both implement timeouts internally, so we shouldn't need to do so here.
             await Promise.all(queues.map((p) => p?.onIdle()));
             return result;
         } catch (e) {
-            defaultLogger.error(e, 'Failed to parse request');
-            this.metrics.publishExceptionMetric(new Date(), event?.Action, e);
+            defaultLogger.error(e, 'Fatal error while handling event');
             return this.#getErrorForException(e);
         }
     }
@@ -352,10 +414,7 @@ export abstract class ResourceBuilderBase<
                     };
             }
         } catch (e) {
-            defaultLogger.error(
-                e,
-                'Resource handler failed to process request'
-            );
+            this.logger.error(e, 'Resource handler failed to process request');
             this.metrics.publishExceptionMetric(new Date(), event.action, e);
             return this.#getErrorForException(e);
         }
@@ -379,7 +438,7 @@ export abstract class ResourceBuilderBase<
         const result = await createHandler({
             action,
             properties: this.options.transformProperties?.toJS(properties),
-            logger: this.#logger,
+            logger: this.logger,
             typeConfiguration:
                 this.options.transformTypeConfiguration.toJS(typeConfiguration),
         });
@@ -431,7 +490,7 @@ export abstract class ResourceBuilderBase<
             previousProperties: this.options.transformProperties.toJS(
                 oldProperties
             ) as any,
-            logger: this.#logger,
+            logger: this.logger,
             typeConfiguration:
                 this.options.transformTypeConfiguration.toJS(typeConfiguration),
         });
@@ -475,7 +534,7 @@ export abstract class ResourceBuilderBase<
             properties: this.options.transformProperties.toJS(
                 properties
             ) as any,
-            logger: this.#logger,
+            logger: this.logger,
             typeConfiguration:
                 this.options.transformTypeConfiguration.toJS(typeConfiguration),
         });
@@ -514,7 +573,7 @@ export abstract class ResourceBuilderBase<
         const result = await readHandler({
             action: action,
             properties: this.options.transformProperties.toJS(properties),
-            logger: this.#logger,
+            logger: this.logger,
             typeConfiguration:
                 this.options.transformTypeConfiguration.toJS(typeConfiguration),
         });
@@ -539,7 +598,7 @@ export abstract class ResourceBuilderBase<
         const listHandler = this.#handlers!.list.bind(this);
         const result = await listHandler({
             action: action,
-            logger: this.#logger,
+            logger: this.logger,
             properties: resourceProperties,
             typeConfiguration:
                 this.options.transformTypeConfiguration.toJS(typeConfiguration),
@@ -597,6 +656,16 @@ export abstract class ResourceBuilderBase<
     }
 
     /** Response Helpers */
+
+    public getSdk<TSdk>(
+        sdk: new (config: RegionInputConfig & AwsAuthInputConfig) => TSdk
+    ) {
+        const context = this.#context.getStore();
+        return new sdk({
+            credentials: context?.credentials,
+            region: context?.region,
+        });
+    }
 
     /**
      * Indicates the a resource was successfully created
