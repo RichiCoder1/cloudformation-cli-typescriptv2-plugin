@@ -62,6 +62,9 @@ export async function getInstrumentation(
     );
 
     if (!credentials) {
+        log.warn(
+            'No credentials found, skipping CloudWatch metrics and log stream creation.'
+        );
         return [
             defaultLogger.child(childContext),
             metrics,
