@@ -10,7 +10,7 @@ This is a plugin for the [CloudFormation CLI](https://github.com/aws-cloudformat
 To install the plugin, run the following command:
 
 ```bash
-pip install cloudformation-cli-typescriptv2-plugin
+pip install cfn-cli-typescriptv2-plugin
 ```
 
 The `cfn` cli will automatically detect the plugin and make it available as a language provider option.
